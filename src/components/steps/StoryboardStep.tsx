@@ -1,6 +1,6 @@
 'use client'
 
-import { useAppStore, type Scene } from '@/lib/store'
+import { useAppStore, type Scene, type SceneAssetStatus } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -17,9 +17,27 @@ import {
   LayoutGrid,
   Clock,
   Eye,
+  AlertCircle,
 } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import { useToast } from '@/hooks/use-toast'
+
+const STATUS_BADGE_CONFIG: Record<SceneAssetStatus, { className: string; label: string }> = {
+  pending: { className: 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400', label: 'Pending' },
+  running: { className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300', label: 'Running' },
+  completed: { className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300', label: 'Done' },
+  failed: { className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300', label: 'Failed' },
+}
+
+function StatusBadge({ status, label }: { status: SceneAssetStatus; label: string }) {
+  const config = STATUS_BADGE_CONFIG[status] || STATUS_BADGE_CONFIG.pending
+  return (
+    <Badge className={`text-[9px] gap-0.5 ${config.className}`}>
+      {status === 'running' && <Loader2 className="h-2 w-2 animate-spin" />}
+      {label}
+    </Badge>
+  )
+}
 
 export default function StoryboardStep() {
   const { currentProject, storyboard, setStoryboard, scenes, setScenes, generating, setGenerating } = useAppStore()
@@ -117,6 +135,10 @@ export default function StoryboardStep() {
     return Object.entries(grouped).sort(([a], [b]) => Number(a) - Number(b))
   }, [scenes])
 
+  function hasAnyFailedStatus(scene: Scene) {
+    return scene.image_status === 'failed' || scene.video_status === 'failed' || scene.tts_status === 'failed'
+  }
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -199,7 +221,7 @@ export default function StoryboardStep() {
                 {partScenes
                   .sort((a, b) => a.scene_number - b.scene_number)
                   .map((scene) => (
-                    <Card key={scene.id} className="overflow-hidden card-hover border-border/50">
+                    <Card key={scene.id} className={`overflow-hidden card-hover border-border/50 ${hasAnyFailedStatus(scene) ? 'border-red-200 dark:border-red-900/50' : ''}`}>
                       <div className="flex">
                         {/* Scene Number & Time */}
                         <div className="w-24 bg-primary/5 p-3 flex flex-col items-center justify-center border-r border-border/30 shrink-0">
@@ -285,6 +307,22 @@ export default function StoryboardStep() {
                                   <p className="text-xs text-muted-foreground">{scene.motion_prompt}</p>
                                 </div>
                               )}
+
+                              {/* Asset Status Badges */}
+                              <div className="flex items-center gap-1.5 pt-1">
+                                <StatusBadge status={scene.image_status} label="Img" />
+                                <StatusBadge status={scene.video_status} label="Vid" />
+                                <StatusBadge status={scene.tts_status} label="TTS" />
+                              </div>
+
+                              {/* Error message */}
+                              {scene.error_message && hasAnyFailedStatus(scene) && (
+                                <div className="flex items-start gap-1.5 text-red-500 mt-1">
+                                  <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                  <p className="text-[10px] line-clamp-2">{scene.error_message}</p>
+                                </div>
+                              )}
+
                               <Button size="sm" variant="ghost" onClick={() => startEditing(scene)} className="gap-1 h-7 text-xs">
                                 <Edit className="h-3 w-3" /> Edit
                               </Button>

@@ -57,19 +57,19 @@ export default function ProviderView() {
     }
   }
 
-  async function testConnection(id: string) {
+  async function testConnection(type: string) {
     try {
-      setTesting(id)
+      setTesting(type)
       const res = await fetch('/api/providers/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ type }),
       })
       if (res.ok) {
         const data = await res.json()
         toast({
           title: data.success ? 'Connection OK' : 'Connection Failed',
-          description: data.message || (data.success ? 'Provider is reachable.' : 'Could not connect to provider.'),
+          description: data.message || (data.success ? 'Provider is reachable.' : 'Could not connect.'),
           variant: data.success ? 'default' : 'destructive',
         })
       } else {
@@ -259,10 +259,10 @@ export default function ProviderView() {
                             size="sm"
                             variant="outline"
                             className="gap-1.5 h-7 text-xs transition-all duration-200 hover:border-primary/50"
-                            onClick={() => testConnection(provider.id)}
-                            disabled={testing === provider.id}
+                            onClick={() => testConnection(provider.type)}
+                            disabled={testing === provider.type}
                           >
-                            {testing === provider.id ? (
+                            {testing === provider.type ? (
                               <Loader2 className="h-3 w-3 animate-spin" />
                             ) : (
                               <Zap className="h-3 w-3" />

@@ -29,6 +29,7 @@ import { useToast } from '@/hooks/use-toast'
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className: string }> = {
   draft: { label: 'Draft', variant: 'secondary', className: 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300' },
   idea_generated: { label: 'Idea Generated', variant: 'secondary', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+  idea_selected: { label: 'Idea Selected', variant: 'secondary', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' },
   script_generated: { label: 'Script Generated', variant: 'secondary', className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
   storyboard_ready: { label: 'Storyboard Ready', variant: 'secondary', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
   character_ready: { label: 'Character Ready', variant: 'secondary', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' },

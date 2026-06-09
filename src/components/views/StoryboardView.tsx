@@ -1,6 +1,6 @@
 'use client'
 
-import { useAppStore, type Scene } from '@/lib/store'
+import { useAppStore, type Scene, type SceneAssetStatus } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -26,9 +26,26 @@ import {
   Lock,
   Unlock,
   Loader2,
+  AlertCircle,
 } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import { useToast } from '@/hooks/use-toast'
+
+const STATUS_COLORS: Record<SceneAssetStatus, string> = {
+  pending: 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400',
+  running: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  completed: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  failed: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
+}
+
+function AssetStatusBadge({ status, label }: { status: SceneAssetStatus; label: string }) {
+  return (
+    <Badge className={`text-[8px] gap-0.5 ${STATUS_COLORS[status] || STATUS_COLORS.pending}`}>
+      {status === 'running' && <Loader2 className="h-2 w-2 animate-spin" />}
+      {label}
+    </Badge>
+  )
+}
 
 export default function StoryboardView() {
   const { currentProject, storyboard, setStoryboard, scenes, setScenes } = useAppStore()
@@ -123,13 +140,6 @@ export default function StoryboardView() {
     return Object.entries(grouped).sort(([a], [b]) => Number(a) - Number(b))
   }, [scenes])
 
-  const STATUS_COLORS: Record<string, string> = {
-    pending: 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400',
-    generating: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-    generated: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-    failed: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
-  }
-
   return (
     <div className="p-6 h-full overflow-auto">
       <div className="flex items-center justify-between mb-6">
@@ -190,130 +200,143 @@ export default function StoryboardView() {
                       <TableHead>VO</TableHead>
                       <TableHead className="w-48">Image Prompt</TableHead>
                       <TableHead className="w-36">Motion Prompt</TableHead>
-                      <TableHead className="w-20 text-center">Status</TableHead>
+                      <TableHead className="w-40 text-center">Asset Status</TableHead>
                       <TableHead className="w-20 text-center">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {partScenes
                       .sort((a, b) => a.scene_number - b.scene_number)
-                      .map((scene) => (
-                        <TableRow key={scene.id} className={scene.locked ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}>
-                          <TableCell className="text-center font-bold text-primary">
-                            {scene.scene_number}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1 text-xs">
-                              <Clock className="h-3 w-3 text-muted-foreground" />
-                              {editingSceneId === scene.id ? (
-                                <div className="flex gap-1">
-                                  <Input
-                                    type="number"
-                                    value={editData.start_time ?? scene.start_time}
-                                    onChange={(e) => setEditData({ ...editData, start_time: parseInt(e.target.value) || 0 })}
-                                    className="h-6 w-12 text-xs"
-                                  />
-                                  <span>-</span>
-                                  <Input
-                                    type="number"
-                                    value={editData.end_time ?? scene.end_time}
-                                    onChange={(e) => setEditData({ ...editData, end_time: parseInt(e.target.value) || 0 })}
-                                    className="h-6 w-12 text-xs"
-                                  />
-                                </div>
-                              ) : (
-                                <span>{scene.start_time}-{scene.end_time}s</span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {editingSceneId === scene.id ? (
-                              <Textarea
-                                value={editData.action || ''}
-                                onChange={(e) => setEditData({ ...editData, action: e.target.value })}
-                                rows={2}
-                                className="text-xs"
-                              />
-                            ) : (
-                              <span className="text-xs line-clamp-2">{scene.action || '-'}</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {editingSceneId === scene.id ? (
-                              <Textarea
-                                value={editData.vo || ''}
-                                onChange={(e) => setEditData({ ...editData, vo: e.target.value })}
-                                rows={2}
-                                className="text-xs"
-                              />
-                            ) : (
-                              <span className="text-xs italic line-clamp-2">{scene.vo || '-'}</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {editingSceneId === scene.id ? (
-                              <Textarea
-                                value={editData.image_prompt || ''}
-                                onChange={(e) => setEditData({ ...editData, image_prompt: e.target.value })}
-                                rows={2}
-                                className="text-xs"
-                              />
-                            ) : scene.image_path ? (
-                              <div className="flex items-center gap-1">
-                                <div className="w-8 h-12 rounded bg-muted overflow-hidden shrink-0">
-                                  <img src={scene.image_path} alt="" className="w-full h-full object-cover" />
-                                </div>
-                                <span className="text-[10px] text-muted-foreground line-clamp-2">{scene.image_prompt}</span>
+                      .map((scene) => {
+                        const hasFailed = scene.image_status === 'failed' || scene.video_status === 'failed' || scene.tts_status === 'failed'
+                        return (
+                          <TableRow key={scene.id} className={scene.locked ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}>
+                            <TableCell className="text-center font-bold text-primary">
+                              {scene.scene_number}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1 text-xs">
+                                <Clock className="h-3 w-3 text-muted-foreground" />
+                                {editingSceneId === scene.id ? (
+                                  <div className="flex gap-1">
+                                    <Input
+                                      type="number"
+                                      value={editData.start_time ?? scene.start_time}
+                                      onChange={(e) => setEditData({ ...editData, start_time: parseInt(e.target.value) || 0 })}
+                                      className="h-6 w-12 text-xs"
+                                    />
+                                    <span>-</span>
+                                    <Input
+                                      type="number"
+                                      value={editData.end_time ?? scene.end_time}
+                                      onChange={(e) => setEditData({ ...editData, end_time: parseInt(e.target.value) || 0 })}
+                                      className="h-6 w-12 text-xs"
+                                    />
+                                  </div>
+                                ) : (
+                                  <span>{scene.start_time}-{scene.end_time}s</span>
+                                )}
                               </div>
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground line-clamp-2">{scene.image_prompt || '-'}</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {editingSceneId === scene.id ? (
-                              <Input
-                                value={editData.motion_prompt || ''}
-                                onChange={(e) => setEditData({ ...editData, motion_prompt: e.target.value })}
-                                className="text-xs h-7"
-                              />
-                            ) : (
-                              <span className="text-xs line-clamp-2">{scene.motion_prompt || '-'}</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge className={`text-[9px] ${STATUS_COLORS[scene.status] || STATUS_COLORS.pending}`}>
-                              {scene.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1 justify-center">
+                            </TableCell>
+                            <TableCell>
                               {editingSceneId === scene.id ? (
-                                <>
-                                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => saveScene(scene.id)}>
-                                    <Check className="h-3 w-3 text-primary" />
-                                  </Button>
-                                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingSceneId(null)}>
-                                    <X className="h-3 w-3 text-destructive" />
-                                  </Button>
-                                </>
+                                <Textarea
+                                  value={editData.action || ''}
+                                  onChange={(e) => setEditData({ ...editData, action: e.target.value })}
+                                  rows={2}
+                                  className="text-xs"
+                                />
                               ) : (
-                                <>
-                                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => startEditing(scene)}>
-                                    <Edit className="h-3 w-3" />
-                                  </Button>
-                                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => toggleLock(scene)}>
-                                    {scene.locked ? (
-                                      <Lock className="h-3 w-3 text-amber-500" />
-                                    ) : (
-                                      <Unlock className="h-3 w-3" />
-                                    )}
-                                  </Button>
-                                </>
+                                <span className="text-xs line-clamp-2">{scene.action || '-'}</span>
                               )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                            </TableCell>
+                            <TableCell>
+                              {editingSceneId === scene.id ? (
+                                <Textarea
+                                  value={editData.vo || ''}
+                                  onChange={(e) => setEditData({ ...editData, vo: e.target.value })}
+                                  rows={2}
+                                  className="text-xs"
+                                />
+                              ) : (
+                                <span className="text-xs italic line-clamp-2">{scene.vo || '-'}</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {editingSceneId === scene.id ? (
+                                <Textarea
+                                  value={editData.image_prompt || ''}
+                                  onChange={(e) => setEditData({ ...editData, image_prompt: e.target.value })}
+                                  rows={2}
+                                  className="text-xs"
+                                />
+                              ) : scene.image_path ? (
+                                <div className="flex items-center gap-1">
+                                  <div className="w-8 h-12 rounded bg-muted overflow-hidden shrink-0">
+                                    <img src={scene.image_path} alt="" className="w-full h-full object-cover" />
+                                  </div>
+                                  <span className="text-[10px] text-muted-foreground line-clamp-2">{scene.image_prompt}</span>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground line-clamp-2">{scene.image_prompt || '-'}</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {editingSceneId === scene.id ? (
+                                <Input
+                                  value={editData.motion_prompt || ''}
+                                  onChange={(e) => setEditData({ ...editData, motion_prompt: e.target.value })}
+                                  className="text-xs h-7"
+                                />
+                              ) : (
+                                <span className="text-xs line-clamp-2">{scene.motion_prompt || '-'}</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <div className="flex items-center gap-1">
+                                  <AssetStatusBadge status={scene.image_status} label="Img" />
+                                  <AssetStatusBadge status={scene.video_status} label="Vid" />
+                                  <AssetStatusBadge status={scene.tts_status} label="TTS" />
+                                </div>
+                                {hasFailed && scene.error_message && (
+                                  <div className="flex items-center gap-0.5 text-red-500 w-full">
+                                    <AlertCircle className="h-2.5 w-2.5 shrink-0" />
+                                    <span className="text-[8px] line-clamp-1 text-left">{scene.error_message}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1 justify-center">
+                                {editingSceneId === scene.id ? (
+                                  <>
+                                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => saveScene(scene.id)}>
+                                      <Check className="h-3 w-3 text-primary" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingSceneId(null)}>
+                                      <X className="h-3 w-3 text-destructive" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => startEditing(scene)}>
+                                      <Edit className="h-3 w-3" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => toggleLock(scene)}>
+                                      {scene.locked ? (
+                                        <Lock className="h-3 w-3 text-amber-500" />
+                                      ) : (
+                                        <Unlock className="h-3 w-3" />
+                                      )}
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
                   </TableBody>
                 </Table>
               </div>

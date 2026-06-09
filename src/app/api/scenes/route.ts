@@ -47,8 +47,10 @@ export async function PATCH(request: NextRequest) {
     const allowedFields = [
       'part_number', 'scene_number', 'start_time', 'end_time', 'duration',
       'action', 'vo', 'visual_description', 'scene_goal', 'image_prompt',
-      'negative_prompt', 'motion_prompt', 'image_path', 'video_path',
-      'audio_path', 'status', 'locked', 'seed', 'raw_json',
+      'negative_prompt', 'motion_prompt', 'camera', 'character_ids', 'location_id',
+      'image_path', 'video_path', 'audio_path', 'subtitle_path',
+      'image_status', 'video_status', 'tts_status', 'status', 'error_message',
+      'locked', 'seed', 'raw_json',
     ]
 
     const updateData: Record<string, unknown> = {}

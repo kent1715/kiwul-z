@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast'
 
 const CHARACTER_FIELDS: { key: keyof Character; label: string; multiline?: boolean }[] = [
   { key: 'name', label: 'Name' },
+  { key: 'role', label: 'Role' },
   { key: 'description', label: 'Description', multiline: true },
   { key: 'gender', label: 'Gender' },
   { key: 'age_range', label: 'Age Range' },
@@ -270,6 +271,9 @@ export default function CharacterStep() {
                           <p className="text-sm line-clamp-2">{character.description}</p>
                         )}
                         <div className="flex flex-wrap gap-1.5">
+                          {character.role && (
+                            <Badge className="text-[10px] bg-primary/10 text-primary">{character.role}</Badge>
+                          )}
                           {character.gender && (
                             <Badge variant="secondary" className="text-[10px]">{character.gender}</Badge>
                           )}

@@ -1,104 +1,55 @@
-import { db } from '@/lib/db'
-import { getLLMProvider, callLLM, parseJSONFromLLM, getPromptTemplate } from '@/lib/llm'
 import { NextRequest, NextResponse } from 'next/server'
-
-const DEFAULT_SCRIPT_PROMPT = `You are a professional scriptwriter for short-form video content. Create a detailed script for this project.
-
-Project Details:
-- Content Type: {content_type}
-- Language: {language}
-- Duration: {duration_seconds} seconds
-- Visual Style: {visual_style}
-- Tone: {tone}
-
-Storyline:
-{storyline}
-
-Create a script with the following JSON structure:
-{
-  "title": "Script Title",
-  "parts": [
-    {
-      "part_number": 1,
-      "part_title": "Part Title",
-      "scenes": [
-        {
-          "scene_number": 1,
-          "duration": 3,
-          "action": "What happens visually",
-          "vo": "Voice-over narration text",
-          "visual_description": "Detailed visual description for image generation",
-          "scene_goal": "What this scene achieves"
-        }
-      ]
-    }
-  ]
-}
-
-Make sure total scene durations add up to approximately {duration_seconds} seconds.
-Each scene should be 2-5 seconds for short-form content.
-Write voice-over in {language}.
-Return ONLY valid JSON.`
+import { db } from '@/lib/db'
+import { getProviderConfig, generateJSON } from '@/server/providers'
+import type { LLMConfig } from '@/server/providers/provider.types'
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { project_id } = body
-
-    if (!project_id) {
-      return NextResponse.json({ error: 'project_id is required' }, { status: 400 })
-    }
+    const { project_id } = await request.json()
+    if (!project_id) return NextResponse.json({ error: 'project_id is required' }, { status: 400 })
 
     const project = await db.project.findUnique({ where: { id: project_id } })
-    if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+
+    const llmConfig = await getProviderConfig<LLMConfig>('llm')
+    if (!llmConfig || !llmConfig.enabled) {
+      return NextResponse.json({ error: 'No active LLM provider' }, { status: 400 })
     }
 
-    const provider = await getLLMProvider()
-    if (!provider) {
-      return NextResponse.json({ error: 'No active LLM provider configured' }, { status: 400 })
+    // Get storyline from project
+    const storylineData = project.storyline_json && project.storyline_json !== '{}'
+      ? JSON.parse(project.storyline_json)
+      : null
+
+    if (!storylineData) {
+      return NextResponse.json({ error: 'No storyline found. Generate a storyline first.' }, { status: 400 })
     }
 
-    // Get storyline from project config
-    const config = JSON.parse(project.config_json || '{}')
-    const storyline = config.storyline || 'No storyline available'
+    const template = await db.promptTemplate.findFirst({ where: { type: 'script', is_default: true } })
+    if (!template) return NextResponse.json({ error: 'No script prompt template found' }, { status: 400 })
 
-    let promptTemplate = await getPromptTemplate('script')
-    if (!promptTemplate) {
-      promptTemplate = DEFAULT_SCRIPT_PROMPT
-    }
+    let prompt = template.template
+      .replace(/{content_type}/g, project.content_type)
+      .replace(/{language}/g, project.language)
+      .replace(/{duration_seconds}/g, String(project.duration_seconds))
+      .replace(/{visual_style}/g, project.visual_style)
+      .replace(/{tone}/g, project.tone || 'engaging')
+      .replace(/{storyline}/g, JSON.stringify(storylineData, null, 2))
 
-    const systemPrompt = promptTemplate
-      .replace('{content_type}', project.content_type)
-      .replace('{language}', project.language)
-      .replace('{duration_seconds}', String(project.duration_seconds))
-      .replace('{visual_style}', project.visual_style)
-      .replace('{tone}', project.tone || 'engaging')
-      .replace('{storyline}', storyline)
+    const result = await generateJSON(llmConfig, 'You are a professional scriptwriter. Return only valid JSON.', prompt)
 
-    const llmResponse = await callLLM(provider, [
-      { role: 'system', content: 'You are a professional scriptwriter. Always respond with valid JSON only.' },
-      { role: 'user', content: systemPrompt },
-    ], { temperature: 0.7, response_format: { type: 'json_object' } })
-
-    const scriptData = parseJSONFromLLM(llmResponse)
-
-    // Store script in project config
-    config.script = scriptData
+    // Save script to project
     await db.project.update({
       where: { id: project_id },
       data: {
-        config_json: JSON.stringify(config),
+        script_json: JSON.stringify(result),
         status: 'script_generated',
       },
     })
 
-    return NextResponse.json({ script: scriptData })
-  } catch (error) {
+    return NextResponse.json({ script: result })
+  } catch (error: any) {
     console.error('Error generating script:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to generate script' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: error.message || 'Failed to generate script' }, { status: 500 })
   }
 }

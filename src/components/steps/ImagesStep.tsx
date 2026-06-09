@@ -1,6 +1,6 @@
 'use client'
 
-import { useAppStore, type Scene } from '@/lib/store'
+import { useAppStore, type Scene, type SceneAssetStatus } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -12,10 +12,27 @@ import {
   Image as ImageIcon,
   Lock,
   Unlock,
-  LockOpen,
+  AlertCircle,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useToast } from '@/hooks/use-toast'
+
+const STATUS_BADGE_CONFIG: Record<SceneAssetStatus, { className: string; label: string }> = {
+  pending: { className: 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400', label: 'Pending' },
+  running: { className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300', label: 'Running' },
+  completed: { className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300', label: 'Done' },
+  failed: { className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300', label: 'Failed' },
+}
+
+function StatusBadge({ status }: { status: SceneAssetStatus }) {
+  const config = STATUS_BADGE_CONFIG[status] || STATUS_BADGE_CONFIG.pending
+  return (
+    <Badge className={`text-[9px] gap-0.5 ${config.className}`}>
+      {status === 'running' && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+      {config.label}
+    </Badge>
+  )
+}
 
 export default function ImagesStep() {
   const { currentProject, scenes, setScenes, generating, setGenerating } = useAppStore()
@@ -53,7 +70,9 @@ export default function ImagesStep() {
       if (res.ok) {
         const data = await res.json()
         if (data.scenes) setScenes(data.scenes)
-        toast({ title: 'Images generated!', description: 'All scene images have been created.' })
+        toast({ title: 'Images generation started!', description: 'All scene images are being processed.' })
+        // Refresh scenes after a short delay to get updated statuses
+        setTimeout(() => fetchScenes(), 2000)
       } else {
         const err = await res.json()
         toast({ title: 'Error', description: err.error || 'Failed to generate images', variant: 'destructive' })
@@ -66,19 +85,22 @@ export default function ImagesStep() {
   }
 
   async function generateSceneImage(sceneId: string) {
+    if (!currentProject) return
     try {
       setGeneratingScenes((prev) => new Set(prev).add(sceneId))
       const res = await fetch(`/api/images/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: currentProject?.id, sceneId }),
+        body: JSON.stringify({ project_id: currentProject.id, sceneId }),
       })
       if (res.ok) {
         const data = await res.json()
         if (data.scene) {
           setScenes(scenes.map((s) => (s.id === sceneId ? { ...s, ...data.scene } : s)))
         }
-        toast({ title: 'Image generated!' })
+        toast({ title: 'Image generation started!' })
+        // Refresh scenes after a short delay to get updated statuses
+        setTimeout(() => fetchScenes(), 2000)
       } else {
         toast({ title: 'Error', description: 'Failed to generate image', variant: 'destructive' })
       }
@@ -108,8 +130,8 @@ export default function ImagesStep() {
     }
   }
 
-  const scenesWithImages = scenes.filter((s) => s.image_path)
-  const scenesWithoutImages = scenes.filter((s) => !s.image_path)
+  const scenesWithImages = scenes.filter((s) => s.image_status === 'completed')
+  const scenesWithoutImages = scenes.filter((s) => s.image_status !== 'completed')
 
   return (
     <div className="p-6">
@@ -166,15 +188,24 @@ export default function ImagesStep() {
                 >
                   {/* Image Area */}
                   <div className="aspect-[9/16] max-h-48 relative bg-muted">
-                    {scene.image_path ? (
+                    {scene.image_status === 'completed' && scene.image_path ? (
                       <img
                         src={scene.image_path}
                         alt={`Scene ${scene.scene_number}`}
                         className="w-full h-full object-cover"
                       />
-                    ) : generatingScenes.has(scene.id) ? (
-                      <div className="w-full h-full flex items-center justify-center">
+                    ) : scene.image_status === 'running' || generatingScenes.has(scene.id) ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-2">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <span className="text-xs text-primary/70">Generating...</span>
+                      </div>
+                    ) : scene.image_status === 'failed' ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                        <AlertCircle className="h-8 w-8 text-red-400" />
+                        <span className="text-xs text-red-500">Failed</span>
+                        {scene.error_message && (
+                          <span className="text-[10px] text-red-400 px-2 text-center line-clamp-2">{scene.error_message}</span>
+                        )}
                       </div>
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center gap-2">
@@ -191,8 +222,8 @@ export default function ImagesStep() {
                       </div>
                     )}
 
-                    {/* Overlay on hover */}
-                    {scene.image_path && (
+                    {/* Overlay on hover for completed images */}
+                    {scene.image_status === 'completed' && scene.image_path && (
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]">
                         <Button
                           size="sm"
@@ -226,14 +257,17 @@ export default function ImagesStep() {
                         Scene {scene.scene_number}
                       </span>
                       <div className="flex items-center gap-1">
-                        <Badge variant="outline" className="text-[9px]">
-                          {scene.start_time}-{scene.end_time}s
-                        </Badge>
+                        <StatusBadge status={scene.image_status} />
                         {scene.locked && (
                           <Lock className="h-3 w-3 text-primary" />
                         )}
                       </div>
                     </div>
+                    {scene.error_message && scene.image_status === 'failed' && (
+                      <p className="text-[10px] text-red-500 line-clamp-2 mt-1">
+                        {scene.error_message}
+                      </p>
+                    )}
                     {scene.image_prompt && (
                       <p className="text-[10px] text-muted-foreground line-clamp-2 mt-1">
                         {scene.image_prompt}

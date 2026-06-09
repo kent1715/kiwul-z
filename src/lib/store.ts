@@ -30,6 +30,7 @@ export const WORKFLOW_STEPS: { key: WorkflowStep; label: string; icon: string }[
 export type ProjectStatus = 
   | 'draft'
   | 'idea_generated'
+  | 'idea_selected'
   | 'script_generated'
   | 'storyboard_ready'
   | 'character_ready'
@@ -38,6 +39,8 @@ export type ProjectStatus =
   | 'audio_ready'
   | 'rendered'
   | 'failed'
+
+export type SceneAssetStatus = 'pending' | 'running' | 'completed' | 'failed'
 
 export interface Project {
   id: string
@@ -55,6 +58,9 @@ export interface Project {
   audience?: string
   tone?: string
   config_json: string
+  storyline_json: string
+  script_json: string
+  final_video_path?: string
   created_at: string
   updated_at: string
 }
@@ -65,6 +71,9 @@ export interface Idea {
   title: string
   hook?: string
   angle?: string
+  conflict_or_value?: string
+  visual_potential?: string
+  estimated_duration?: number
   content_type?: string
   raw_json: string
   selected: boolean
@@ -96,10 +105,18 @@ export interface Scene {
   image_prompt?: string
   negative_prompt?: string
   motion_prompt?: string
+  camera?: string
+  character_ids: string
+  location_id?: string
   image_path?: string
   video_path?: string
   audio_path?: string
+  subtitle_path?: string
+  image_status: SceneAssetStatus
+  video_status: SceneAssetStatus
+  tts_status: SceneAssetStatus
   status: string
+  error_message?: string
   locked: boolean
   seed?: number
 }
@@ -108,6 +125,7 @@ export interface Character {
   id: string
   project_id: string
   name: string
+  role: string
   description?: string
   gender?: string
   age_range?: string
@@ -128,6 +146,7 @@ export interface LocationData {
   project_id: string
   name: string
   description?: string
+  visual_style?: string
   lighting?: string
   camera_style?: string
   consistency_prompt?: string

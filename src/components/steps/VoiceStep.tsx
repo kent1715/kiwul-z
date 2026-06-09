@@ -1,8 +1,8 @@
 'use client'
 
-import { useAppStore } from '@/lib/store'
+import { useAppStore, type SceneAssetStatus } from '@/lib/store'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
 import {
@@ -12,9 +12,27 @@ import {
   Play,
   Pause,
   Volume2,
+  AlertCircle,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useToast } from '@/hooks/use-toast'
+
+const STATUS_BADGE_CONFIG: Record<SceneAssetStatus, { className: string; label: string }> = {
+  pending: { className: 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400', label: 'Pending' },
+  running: { className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300', label: 'Running' },
+  completed: { className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300', label: 'Done' },
+  failed: { className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300', label: 'Failed' },
+}
+
+function StatusBadge({ status }: { status: SceneAssetStatus }) {
+  const config = STATUS_BADGE_CONFIG[status] || STATUS_BADGE_CONFIG.pending
+  return (
+    <Badge className={`text-[9px] gap-0.5 ${config.className}`}>
+      {status === 'running' && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+      {config.label}
+    </Badge>
+  )
+}
 
 export default function VoiceStep() {
   const { currentProject, scenes, setScenes, generating, setGenerating } = useAppStore()
@@ -54,7 +72,8 @@ export default function VoiceStep() {
       if (res.ok) {
         const data = await res.json()
         if (data.scenes) setScenes(data.scenes)
-        toast({ title: 'Voice-over generated!', description: 'All scene audio has been created.' })
+        toast({ title: 'Voice-over generation started!', description: 'All scene audio is being processed.' })
+        setTimeout(() => fetchScenes(), 2000)
       } else {
         toast({ title: 'Error', description: 'Failed to generate voice-over', variant: 'destructive' })
       }
@@ -66,19 +85,21 @@ export default function VoiceStep() {
   }
 
   async function generateSceneVoice(sceneId: string) {
+    if (!currentProject) return
     try {
       setGeneratingScenes((prev) => new Set(prev).add(sceneId))
       const res = await fetch('/api/voice/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: currentProject?.id, sceneId, speed }),
+        body: JSON.stringify({ project_id: currentProject.id, sceneId, speed }),
       })
       if (res.ok) {
         const data = await res.json()
         if (data.scene) {
           setScenes(scenes.map((s) => (s.id === sceneId ? { ...s, ...data.scene } : s)))
         }
-        toast({ title: 'Voice generated!' })
+        toast({ title: 'Voice generation started!' })
+        setTimeout(() => fetchScenes(), 2000)
       } else {
         toast({ title: 'Error', description: 'Failed to generate voice', variant: 'destructive' })
       }
@@ -93,7 +114,7 @@ export default function VoiceStep() {
     }
   }
 
-  const scenesWithAudio = scenes.filter((s) => s.audio_path)
+  const scenesWithAudio = scenes.filter((s) => s.tts_status === 'completed')
   const scenesWithVo = scenes.filter((s) => s.vo)
 
   return (
@@ -163,6 +184,7 @@ export default function VoiceStep() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-medium text-sm">Scene {scene.scene_number}</span>
+                          <StatusBadge status={scene.tts_status} />
                           <Badge variant="outline" className="text-[9px]">
                             {scene.start_time}-{scene.end_time}s
                           </Badge>
@@ -173,8 +195,16 @@ export default function VoiceStep() {
                           <p className="text-xs text-muted-foreground italic">No voice-over text</p>
                         )}
 
-                        {/* Audio Player Placeholder */}
-                        {scene.audio_path ? (
+                        {/* Error message */}
+                        {scene.error_message && scene.tts_status === 'failed' && (
+                          <div className="flex items-center gap-1 mt-2 text-red-500">
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                            <p className="text-xs line-clamp-2">{scene.error_message}</p>
+                          </div>
+                        )}
+
+                        {/* Audio Player */}
+                        {scene.audio_path && scene.tts_status === 'completed' ? (
                           <div className="flex items-center gap-2 mt-2 bg-primary/5 rounded-lg p-2">
                             <Button
                               size="icon"
@@ -199,19 +229,19 @@ export default function VoiceStep() {
                       {/* Generate Button */}
                       <Button
                         size="sm"
-                        variant={scene.audio_path ? 'outline' : 'default'}
+                        variant={scene.tts_status === 'completed' ? 'outline' : 'default'}
                         className="gap-1 shrink-0"
                         onClick={() => generateSceneVoice(scene.id)}
                         disabled={generatingScenes.has(scene.id) || !scene.vo}
                       >
-                        {generatingScenes.has(scene.id) ? (
+                        {generatingScenes.has(scene.id) || scene.tts_status === 'running' ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : scene.audio_path ? (
+                        ) : scene.tts_status === 'completed' ? (
                           <Sparkles className="h-3.5 w-3.5" />
                         ) : (
                           <Mic className="h-3.5 w-3.5" />
                         )}
-                        {scene.audio_path ? 'Regenerate' : 'Generate'}
+                        {scene.tts_status === 'completed' ? 'Regenerate' : scene.tts_status === 'running' ? 'Generating...' : 'Generate'}
                       </Button>
                     </div>
                   </CardContent>

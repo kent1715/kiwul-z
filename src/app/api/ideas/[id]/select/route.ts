@@ -25,6 +25,12 @@ export async function PATCH(
       data: { selected: true },
     })
 
+    // Update project status
+    await db.project.update({
+      where: { id: existing.project_id },
+      data: { status: 'idea_selected' },
+    })
+
     return NextResponse.json(idea)
   } catch (error) {
     console.error('Error selecting idea:', error)

@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Download,
   Settings,
+  ShieldCheck,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useToast } from '@/hooks/use-toast'
@@ -22,10 +23,13 @@ export default function RenderStep() {
   const { toast } = useToast()
   const [renderProgress, setRenderProgress] = useState(0)
   const [rendering, setRendering] = useState(false)
+  const [renderComplete, setRenderComplete] = useState(false)
+  const [qcResult, setQcResult] = useState<Record<string, unknown> | null>(null)
+  const [qcRunning, setQcRunning] = useState(false)
 
-  const scenesWithVideo = scenes.filter((s) => s.video_path)
-  const scenesWithAudio = scenes.filter((s) => s.audio_path)
-  const scenesWithImage = scenes.filter((s) => s.image_path)
+  const scenesWithVideo = scenes.filter((s) => s.video_status === 'completed')
+  const scenesWithAudio = scenes.filter((s) => s.tts_status === 'completed')
+  const scenesWithImage = scenes.filter((s) => s.image_status === 'completed')
 
   const readinessScore = scenes.length > 0
     ? Math.round(((scenesWithImage.length + scenesWithVideo.length + scenesWithAudio.length) / (scenes.length * 3)) * 100)
@@ -45,28 +49,23 @@ export default function RenderStep() {
     try {
       setRendering(true)
       setRenderProgress(0)
-
-      // Simulate progress
-      const interval = setInterval(() => {
-        setRenderProgress((prev) => {
-          if (prev >= 90) {
-            clearInterval(interval)
-            return 90
-          }
-          return prev + Math.random() * 15
-        })
-      }, 500)
+      setRenderComplete(false)
 
       const res = await fetch('/api/render', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_id: currentProject.id }),
       })
-      
-      clearInterval(interval)
 
       if (res.ok) {
-        setRenderProgress(100)
+        const data = await res.json()
+        // If the API returns progress info, use it; otherwise mark complete
+        if (data.progress !== undefined) {
+          setRenderProgress(data.progress)
+        } else {
+          setRenderProgress(100)
+        }
+        setRenderComplete(true)
         toast({ title: 'Render complete!', description: 'Your video is ready for download.' })
       } else {
         const err = await res.json()
@@ -78,6 +77,27 @@ export default function RenderStep() {
       setRendering(false)
     }
   }
+
+  async function runQC() {
+    if (!currentProject) return
+    try {
+      setQcRunning(true)
+      const res = await fetch(`/api/projects/${currentProject.id}/qc`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        setQcResult(data)
+        toast({ title: 'QC complete', description: data.summary || 'Quality check finished.' })
+      } else {
+        toast({ title: 'Error', description: 'Failed to run QC', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Failed to run QC', variant: 'destructive' })
+    } finally {
+      setQcRunning(false)
+    }
+  }
+
+  const downloadUrl = currentProject ? `/api/assets/projects/${currentProject.id}/final/final.mp4` : null
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
@@ -175,6 +195,28 @@ export default function RenderStep() {
         </Card>
       )}
 
+      {/* QC Result */}
+      {qcResult && (
+        <Card className="mb-6 border-primary/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              QC Results
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {Object.entries(qcResult).map(([key, value]) => (
+                <div key={key} className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
+                  <span className="font-medium">{typeof value === 'boolean' ? (value ? '✓ Pass' : '✗ Fail') : String(value)}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Action Buttons */}
       <div className="flex gap-3">
         <Button
@@ -195,12 +237,36 @@ export default function RenderStep() {
             </>
           )}
         </Button>
-        {renderProgress === 100 && (
-          <Button size="lg" variant="outline" className="gap-2">
-            <Download className="h-5 w-5" />
-            Download
+        {renderComplete && downloadUrl && (
+          <Button size="lg" variant="outline" className="gap-2" asChild>
+            <a href={downloadUrl} download>
+              <Download className="h-5 w-5" />
+              Download
+            </a>
           </Button>
         )}
+      </div>
+
+      {/* QC Button */}
+      <div className="mt-3">
+        <Button
+          variant="outline"
+          onClick={runQC}
+          disabled={qcRunning || !currentProject}
+          className="gap-2 w-full"
+        >
+          {qcRunning ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Running QC...
+            </>
+          ) : (
+            <>
+              <ShieldCheck className="h-4 w-4" />
+              Run Quality Check
+            </>
+          )}
+        </Button>
       </div>
 
       {!allChecksPassed && scenes.length > 0 && (
