@@ -1,11 +1,12 @@
 import { VideoConfig, TestResult, VideoGenerationResult } from './provider.types'
+import { openAIEndpoint } from '../url'
 import { writeFileSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
 
 export async function testConnection(config: VideoConfig): Promise<TestResult> {
   const start = Date.now()
   try {
-    const res = await fetch(`${config.base_url}/models`, { signal: AbortSignal.timeout(10000) })
+    const res = await fetch(openAIEndpoint(config.base_url, '/models'), { signal: AbortSignal.timeout(10000) })
     if (!res.ok) return { success: false, message: `HTTP ${res.status}` }
     return { success: true, message: 'LTX video provider reachable.', latency_ms: Date.now() - start }
   } catch (err: unknown) {
@@ -38,7 +39,7 @@ export async function generateVideo(
   outputPath: string,
   options?: { duration?: number; fps?: number; resolution?: string; seed?: number }
 ): Promise<VideoGenerationResult> {
-  const url = `${config.base_url}/videos`
+  const url = openAIEndpoint(config.base_url, '/videos')
   mkdirSync(dirname(outputPath), { recursive: true })
 
   const duration = options?.duration || config.duration || 3
@@ -97,7 +98,7 @@ export async function generateVideo(
   // Handle async response (job ID)
   const jobId = data.id || data.job_id || data.task_id
   if (jobId) {
-    const pollUrl = `${config.base_url}/videos/${jobId}`
+    const pollUrl = openAIEndpoint(config.base_url, `/videos/${jobId}`)
     const result = await pollJob(pollUrl)
 
     const output = result.output || result.data || result.video || result

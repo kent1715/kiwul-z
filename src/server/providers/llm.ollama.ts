@@ -1,9 +1,10 @@
 import { LLMConfig, TestResult } from './provider.types'
+import { openAIEndpoint } from '../url'
 
 export async function testConnection(config: LLMConfig): Promise<TestResult> {
   const start = Date.now()
   try {
-    const res = await fetch(`${config.base_url}/models`, { signal: AbortSignal.timeout(10000) })
+    const res = await fetch(openAIEndpoint(config.base_url, '/models'), { signal: AbortSignal.timeout(10000) })
     if (!res.ok) return { success: false, message: `HTTP ${res.status}` }
     const data = await res.json()
     const models = data.data || data.models || []
@@ -26,7 +27,7 @@ export async function callLLM(
   messages: Array<{ role: string; content: string }>,
   options?: { temperature?: number; max_tokens?: number }
 ): Promise<string> {
-  const url = `${config.base_url}/chat/completions`
+  const url = openAIEndpoint(config.base_url, '/chat/completions')
   const body = {
     model: config.model || 'qwen3:8b',
     messages,

@@ -1,4 +1,5 @@
 import { db } from '@/lib/db'
+import { openAIEndpoint } from '@/server/url'
 
 export interface LLMProvider {
   id: string
@@ -21,7 +22,7 @@ export async function callLLM(
   messages: Array<{ role: string; content: string }>,
   options?: { temperature?: number; max_tokens?: number; response_format?: Record<string, unknown> }
 ): Promise<string> {
-  const url = `${provider.base_url.replace(/\/$/, '')}/chat/completions`
+  const url = openAIEndpoint(provider.base_url, '/chat/completions')
 
   const body: Record<string, unknown> = {
     model: provider.model || 'gpt-3.5-turbo',

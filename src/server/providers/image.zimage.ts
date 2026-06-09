@@ -1,11 +1,12 @@
 import { ImageConfig, TestResult, ImageGenerationResult } from './provider.types'
+import { openAIEndpoint } from '../url'
 import { writeFileSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
 
 export async function testConnection(config: ImageConfig): Promise<TestResult> {
   const start = Date.now()
   try {
-    const res = await fetch(`${config.base_url}/models`, { signal: AbortSignal.timeout(10000) })
+    const res = await fetch(openAIEndpoint(config.base_url, '/models'), { signal: AbortSignal.timeout(10000) })
     if (!res.ok) return { success: false, message: `HTTP ${res.status}` }
     return { success: true, message: 'Z-Image provider reachable.', latency_ms: Date.now() - start }
   } catch (err: unknown) {
@@ -21,7 +22,7 @@ export async function generateImage(
   outputPath: string,
   options?: { seed?: number; size?: string }
 ): Promise<ImageGenerationResult> {
-  const url = `${config.base_url}/images/generations`
+  const url = openAIEndpoint(config.base_url, '/images/generations')
   const size = options?.size || config.default_size || '768x1024'
 
   const body: Record<string, unknown> = {

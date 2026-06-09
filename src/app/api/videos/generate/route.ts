@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getProviderConfig, generateVideo } from '@/server/providers'
-import { ensureProjectDirs, getVideoPath, toApiPath } from '@/server/storage'
+import { ensureProjectDirs, getVideoPath, toApiPath, fromApiPath } from '@/server/storage'
 import type { VideoConfig } from '@/server/providers/provider.types'
 
 export async function POST(request: NextRequest) {
@@ -46,9 +46,7 @@ export async function POST(request: NextRequest) {
 
     for (const scene of scenes) {
       // Convert API path back to filesystem path
-      const imagePath = scene.image_path?.startsWith('/api/assets/')
-        ? scene.image_path.replace('/api/assets/', `${process.cwd()}/outputs/`)
-        : scene.image_path
+      const imagePath = fromApiPath(scene.image_path || '')
 
       if (!imagePath) {
         errors.push({ scene_id: scene.id, error: 'No image path available' })

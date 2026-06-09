@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getProviderConfig, render as renderFFmpeg } from '@/server/providers'
-import { ensureProjectDirs, getFinalVideoPath, toApiPath, writeSRTFile } from '@/server/storage'
+import { ensureProjectDirs, getFinalVideoPath, toApiPath, fromApiPath, writeSRTFile } from '@/server/storage'
 import { existsSync } from 'fs'
 import type { RenderConfig } from '@/server/providers/provider.types'
 
@@ -41,12 +41,8 @@ export async function POST(request: NextRequest) {
 
     // Convert API paths to filesystem paths and prepare scene data
     const renderScenes = scenesWithVideo.map((scene) => ({
-      video_path: scene.video_path!.startsWith('/api/assets/')
-        ? scene.video_path!.replace('/api/assets/', `${process.cwd()}/outputs/`)
-        : scene.video_path!,
-      audio_path: scene.audio_path?.startsWith('/api/assets/')
-        ? scene.audio_path.replace('/api/assets/', `${process.cwd()}/outputs/`)
-        : scene.audio_path || undefined,
+      video_path: fromApiPath(scene.video_path!),
+      audio_path: scene.audio_path ? fromApiPath(scene.audio_path) : undefined,
       subtitle_path: scene.subtitle_path || undefined,
       duration: scene.duration,
     }))

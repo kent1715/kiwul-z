@@ -67,15 +67,31 @@ export function getLocationImagePath(projectId: string, locationId: string): str
 }
 
 /**
- * Convert an absolute file path to a relative API-servable path
- * e.g. /home/z/my-project/outputs/projects/xxx/images/scene_001.png
- *   → /api/assets/xxx/images/scene_001.png
+ * Convert an absolute file path to a relative API-servable path.
+ * Works on both Unix (/) and Windows (\) path separators.
+ *
+ * Unix:   /home/user/my-project/outputs/projects/xxx/images/scene.png → /api/assets/projects/xxx/images/scene.png
+ * Windows: C:\Users\user\my-project\outputs\projects\xxx\images\scene.png → /api/assets/projects/xxx/images/scene.png
  */
 export function toApiPath(absolutePath: string): string {
-  const outputsIndex = absolutePath.indexOf('/outputs/')
+  // Normalize backslashes to forward slashes for Windows compatibility
+  const normalized = absolutePath.replace(/\\/g, '/')
+  const outputsIndex = normalized.indexOf('/outputs/')
   if (outputsIndex === -1) return absolutePath
-  const relativePath = absolutePath.substring(outputsIndex + '/outputs/'.length)
+  const relativePath = normalized.substring(outputsIndex + '/outputs/'.length)
   return `/api/assets/${relativePath}`
+}
+
+/**
+ * Convert an API-servable path back to an absolute filesystem path.
+ * Uses forward slashes on Unix, backslashes on Windows (via path.join).
+ *
+ * /api/assets/projects/xxx/images/scene.png → <cwd>/outputs/projects/xxx/images/scene.png
+ */
+export function fromApiPath(apiPath: string): string {
+  if (!apiPath.startsWith('/api/assets/')) return apiPath
+  const relativePath = apiPath.substring('/api/assets/'.length)
+  return join(process.cwd(), 'outputs', relativePath)
 }
 
 /**
