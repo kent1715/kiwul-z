@@ -92,7 +92,7 @@ export default function RenderStep() {
       </div>
 
       {/* Quality Check */}
-      <Card className="mb-6">
+      <Card className="mb-6 card-hover border-border/50">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Settings className="h-4 w-4" />
@@ -104,9 +104,9 @@ export default function RenderStep() {
             <div key={check.label} className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {check.ok ? (
-                  <Check className="h-4 w-4 text-emerald-500" />
+                  <Check className="h-4 w-4 text-primary" />
                 ) : (
-                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
                 )}
                 <span className="text-sm">{check.label}</span>
               </div>
@@ -127,7 +127,7 @@ export default function RenderStep() {
       </Card>
 
       {/* Export Info */}
-      <Card className="mb-6">
+      <Card className="mb-6 card-hover border-border/50">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Export Settings</CardTitle>
         </CardHeader>
@@ -163,7 +163,7 @@ export default function RenderStep() {
 
       {/* Render Progress */}
       {rendering && (
-        <Card className="mb-6 border-primary/30">
+        <Card className="mb-6 border-primary/40">
           <CardContent className="p-4">
             <div className="flex items-center gap-3 mb-2">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -204,7 +204,7 @@ export default function RenderStep() {
       </div>
 
       {!allChecksPassed && scenes.length > 0 && (
-        <p className="text-xs text-amber-600 dark:text-amber-400 mt-3 text-center">
+        <p className="text-xs text-amber-700 dark:text-amber-400 mt-3 text-center">
           Some quality checks have not passed. You can still render, but the output may be incomplete.
         </p>
       )}

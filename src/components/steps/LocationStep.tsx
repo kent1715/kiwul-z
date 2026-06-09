@@ -159,7 +159,7 @@ export default function LocationStep() {
         </div>
       ) : locations.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center mb-4">
             <MapPin className="h-8 w-8 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-semibold mb-2">No locations yet</h3>
@@ -174,7 +174,7 @@ export default function LocationStep() {
       ) : (
         <div className="space-y-4">
           {locations.map((location) => (
-            <Card key={location.id}>
+            <Card key={location.id} className="card-hover border-border/50">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base flex items-center gap-2">
@@ -205,7 +205,7 @@ export default function LocationStep() {
               <CardContent>
                 <div className="flex gap-4">
                   {/* Reference Image */}
-                  <div className="w-36 h-24 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden border">
+                  <div className="w-36 h-24 rounded-lg bg-primary/5 flex items-center justify-center shrink-0 overflow-hidden border border-border/50">
                     {location.reference_image_path ? (
                       <img
                         src={location.reference_image_path}

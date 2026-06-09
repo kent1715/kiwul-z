@@ -171,7 +171,7 @@ export default function CharacterStep() {
         </div>
       ) : characters.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center mb-4">
             <User className="h-8 w-8 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-semibold mb-2">No characters yet</h3>
@@ -186,7 +186,7 @@ export default function CharacterStep() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {characters.map((character) => (
-            <Card key={character.id}>
+            <Card key={character.id} className="card-hover border-border/50">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base flex items-center gap-2">
@@ -217,7 +217,7 @@ export default function CharacterStep() {
               <CardContent className="space-y-3 pt-0">
                 <div className="flex gap-4">
                   {/* Reference Image */}
-                  <div className="w-28 h-36 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden border">
+                  <div className="w-28 h-36 rounded-lg bg-primary/5 flex items-center justify-center shrink-0 overflow-hidden border border-border/50">
                     {character.reference_image_path ? (
                       <img
                         src={character.reference_image_path}

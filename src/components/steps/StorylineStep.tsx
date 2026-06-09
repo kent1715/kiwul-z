@@ -174,7 +174,7 @@ export default function StorylineStep() {
         </Card>
       ) : !parsed && !editing ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center mb-4">
             <GitBranch className="h-8 w-8 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-semibold mb-2">No storyline yet</h3>
@@ -187,14 +187,14 @@ export default function StorylineStep() {
           </Button>
         </div>
       ) : (
-        <Card>
+        <Card className="card-hover border-border/50">
           <CardHeader>
             <CardTitle className="text-lg">{displayData?.title || 'Storyline'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {FIELDS.map(({ key, label, multiline }) => (
               <div key={key}>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</label>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">{label}</label>
                 {editing ? (
                   multiline ? (
                     <Textarea

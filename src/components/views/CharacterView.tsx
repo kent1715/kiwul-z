@@ -165,7 +165,7 @@ export default function CharacterView() {
       ) : (
         <div className="space-y-6">
           {characters.map((character) => (
-            <Card key={character.id}>
+            <Card key={character.id} className="card-hover border-border/50 transition-all duration-200">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -202,7 +202,7 @@ export default function CharacterView() {
                 <div className="flex gap-6">
                   {/* Reference Image */}
                   <div className="w-40 shrink-0">
-                    <div className="w-40 h-52 rounded-lg bg-muted flex items-center justify-center overflow-hidden border">
+                    <div className="w-40 h-52 rounded-lg bg-muted/50 flex items-center justify-center overflow-hidden border border-border/50">
                       {character.reference_image_path ? (
                         <img
                           src={character.reference_image_path}
@@ -211,7 +211,7 @@ export default function CharacterView() {
                         />
                       ) : (
                         <div className="text-center p-3">
-                          <ImageIcon className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                          <ImageIcon className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
                           <span className="text-[10px] text-muted-foreground block mb-2">No reference image</span>
                           <Button
                             size="sm"

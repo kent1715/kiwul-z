@@ -154,7 +154,7 @@ export default function StoryboardStep() {
         </div>
       ) : scenes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center mb-4">
             <LayoutGrid className="h-8 w-8 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-semibold mb-2">No storyboard yet</h3>
@@ -186,7 +186,7 @@ export default function StoryboardStep() {
           {parts.map(([partNum, partScenes]) => (
             <div key={partNum}>
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                <div className="w-8 h-8 rounded-full bg-primary/5 flex items-center justify-center text-xs font-bold text-primary">
                   {partNum}
                 </div>
                 <h3 className="font-semibold text-sm">Part {partNum}</h3>
@@ -199,10 +199,10 @@ export default function StoryboardStep() {
                 {partScenes
                   .sort((a, b) => a.scene_number - b.scene_number)
                   .map((scene) => (
-                    <Card key={scene.id} className="overflow-hidden">
+                    <Card key={scene.id} className="overflow-hidden card-hover border-border/50">
                       <div className="flex">
                         {/* Scene Number & Time */}
-                        <div className="w-24 bg-muted/50 p-3 flex flex-col items-center justify-center border-r shrink-0">
+                        <div className="w-24 bg-primary/5 p-3 flex flex-col items-center justify-center border-r border-border/30 shrink-0">
                           <span className="text-lg font-bold text-primary">
                             {scene.scene_number}
                           </span>
@@ -293,7 +293,7 @@ export default function StoryboardStep() {
                         </CardContent>
 
                         {/* Image Preview */}
-                        <div className="w-28 border-l bg-muted/30 flex items-center justify-center shrink-0">
+                        <div className="w-28 border-l border-border/30 bg-primary/5 flex items-center justify-center shrink-0">
                           {scene.image_path ? (
                             <div className="w-full h-full relative">
                               <img

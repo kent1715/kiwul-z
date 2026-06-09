@@ -145,7 +145,7 @@ export default function IdeaStep() {
         </div>
       ) : ideas.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center mb-4">
             <Lightbulb className="h-8 w-8 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-semibold mb-2">No ideas yet</h3>
@@ -162,10 +162,10 @@ export default function IdeaStep() {
           {ideas.map((idea) => (
             <Card
               key={idea.id}
-              className={`transition-all ${
+              className={`transition-all border-border/50 ${
                 idea.selected
                   ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
-                  : 'hover:border-primary/30'
+                  : 'card-hover'
               }`}
             >
               <CardHeader className="pb-3">
@@ -181,7 +181,7 @@ export default function IdeaStep() {
                       <CardTitle className="text-base">{idea.title}</CardTitle>
                     )}
                     {idea.selected && (
-                      <Badge className="bg-emerald-500 text-white shrink-0">
+                      <Badge className="bg-primary text-primary-foreground shrink-0">
                         <Check className="h-3 w-3 mr-1" />
                         Selected
                       </Badge>

@@ -129,7 +129,7 @@ export default function VoiceStep() {
 
       {scenes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center mb-4">
             <Mic className="h-8 w-8 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-semibold mb-2">No scenes found</h3>
@@ -151,11 +151,11 @@ export default function VoiceStep() {
             {scenes
               .sort((a, b) => a.scene_number - b.scene_number)
               .map((scene) => (
-                <Card key={scene.id}>
+                <Card key={scene.id} className="card-hover border-border/50">
                   <CardContent className="p-4">
                     <div className="flex items-start gap-4">
                       {/* Scene Number */}
-                      <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                      <div className="w-12 h-12 rounded-lg bg-primary/5 flex items-center justify-center shrink-0">
                         <span className="font-bold text-primary">{scene.scene_number}</span>
                       </div>
 
@@ -175,7 +175,7 @@ export default function VoiceStep() {
 
                         {/* Audio Player Placeholder */}
                         {scene.audio_path ? (
-                          <div className="flex items-center gap-2 mt-2 bg-muted/50 rounded-lg p-2">
+                          <div className="flex items-center gap-2 mt-2 bg-primary/5 rounded-lg p-2">
                             <Button
                               size="icon"
                               variant="ghost"

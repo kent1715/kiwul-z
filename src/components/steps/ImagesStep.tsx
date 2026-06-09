@@ -133,7 +133,7 @@ export default function ImagesStep() {
 
       {scenes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center mb-4">
             <ImageIcon className="h-8 w-8 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-semibold mb-2">No scenes found</h3>
@@ -162,7 +162,7 @@ export default function ImagesStep() {
               .map((scene) => (
                 <Card
                   key={scene.id}
-                  className={`overflow-hidden group ${scene.locked ? 'ring-2 ring-amber-400/50' : ''}`}
+                  className={`overflow-hidden group card-hover border-border/50 ${scene.locked ? 'ring-2 ring-primary/40' : ''}`}
                 >
                   {/* Image Area */}
                   <div className="aspect-[9/16] max-h-48 relative bg-muted">
@@ -193,7 +193,7 @@ export default function ImagesStep() {
 
                     {/* Overlay on hover */}
                     {scene.image_path && (
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]">
                         <Button
                           size="sm"
                           variant="secondary"
@@ -212,7 +212,7 @@ export default function ImagesStep() {
                       className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center hover:bg-black/70 transition-colors"
                     >
                       {scene.locked ? (
-                        <Lock className="h-3.5 w-3.5 text-amber-400" />
+                        <Lock className="h-3.5 w-3.5 text-primary" />
                       ) : (
                         <Unlock className="h-3.5 w-3.5 text-white/70" />
                       )}
@@ -230,7 +230,7 @@ export default function ImagesStep() {
                           {scene.start_time}-{scene.end_time}s
                         </Badge>
                         {scene.locked && (
-                          <Lock className="h-3 w-3 text-amber-500" />
+                          <Lock className="h-3 w-3 text-primary" />
                         )}
                       </div>
                     </div>

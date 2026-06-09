@@ -27,15 +27,15 @@ import { useState, useEffect } from 'react'
 import { useToast } from '@/hooks/use-toast'
 
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className: string }> = {
-  draft: { label: 'Draft', variant: 'secondary', className: 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300' },
-  idea_generated: { label: 'Idea Generated', variant: 'secondary', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' },
-  script_generated: { label: 'Script Generated', variant: 'secondary', className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300' },
-  storyboard_ready: { label: 'Storyboard Ready', variant: 'secondary', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' },
-  character_ready: { label: 'Character Ready', variant: 'secondary', className: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300' },
-  images_ready: { label: 'Images Ready', variant: 'secondary', className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300' },
-  videos_ready: { label: 'Videos Ready', variant: 'secondary', className: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300' },
-  audio_ready: { label: 'Audio Ready', variant: 'secondary', className: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300' },
-  rendered: { label: 'Rendered', variant: 'default', className: 'bg-emerald-500 text-white dark:bg-emerald-600' },
+  draft: { label: 'Draft', variant: 'secondary', className: 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300' },
+  idea_generated: { label: 'Idea Generated', variant: 'secondary', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+  script_generated: { label: 'Script Generated', variant: 'secondary', className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
+  storyboard_ready: { label: 'Storyboard Ready', variant: 'secondary', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+  character_ready: { label: 'Character Ready', variant: 'secondary', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' },
+  images_ready: { label: 'Images Ready', variant: 'secondary', className: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300' },
+  videos_ready: { label: 'Videos Ready', variant: 'secondary', className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200' },
+  audio_ready: { label: 'Audio Ready', variant: 'secondary', className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' },
+  rendered: { label: 'Rendered', variant: 'default', className: 'bg-amber-500 text-white dark:bg-amber-600' },
   failed: { label: 'Failed', variant: 'destructive', className: '' },
 }
 
@@ -121,7 +121,7 @@ export default function ProjectListView() {
 
   return (
     <div className="p-6 h-full">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-8 rounded-xl gradient-warm px-6 py-5 -mx-2 -mt-1">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
           <p className="text-muted-foreground text-sm mt-1">Manage your content creation projects</p>
@@ -134,11 +134,11 @@ export default function ProjectListView() {
 
       {projects.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-[60vh] text-center">
-          <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-4">
-            <Film className="h-10 w-10 text-muted-foreground" />
+          <div className="w-14 h-14 rounded-full bg-muted/60 flex items-center justify-center mb-4">
+            <Film className="h-7 w-7 text-muted-foreground/60" />
           </div>
-          <h2 className="text-xl font-semibold mb-2">No projects yet</h2>
-          <p className="text-muted-foreground mb-4 max-w-sm">
+          <h2 className="text-lg font-semibold mb-2 text-muted-foreground">No projects yet</h2>
+          <p className="text-muted-foreground/80 mb-5 max-w-sm text-sm">
             Create your first content project to start generating AI-powered videos, stories, and more.
           </p>
           <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
@@ -153,7 +153,7 @@ export default function ProjectListView() {
             return (
               <Card
                 key={project.id}
-                className="cursor-pointer hover:shadow-md transition-all hover:border-primary/30 group"
+                className="cursor-pointer card-hover border-border/50 transition-all duration-200 hover:border-primary/30 group"
                 onClick={() => selectProject(project)}
               >
                 <CardHeader className="pb-3">

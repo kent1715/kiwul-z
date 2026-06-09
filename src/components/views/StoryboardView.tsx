@@ -124,10 +124,10 @@ export default function StoryboardView() {
   }, [scenes])
 
   const STATUS_COLORS: Record<string, string> = {
-    pending: 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
-    generating: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-    generated: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-    failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+    pending: 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400',
+    generating: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    generated: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    failed: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
   }
 
   return (
@@ -180,7 +180,7 @@ export default function StoryboardView() {
                 <Separator className="flex-1" />
               </div>
 
-              <div className="rounded-lg border overflow-hidden">
+              <div className="rounded-lg border border-border/50 overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -290,7 +290,7 @@ export default function StoryboardView() {
                               {editingSceneId === scene.id ? (
                                 <>
                                   <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => saveScene(scene.id)}>
-                                    <Check className="h-3 w-3 text-emerald-500" />
+                                    <Check className="h-3 w-3 text-primary" />
                                   </Button>
                                   <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingSceneId(null)}>
                                     <X className="h-3 w-3 text-destructive" />

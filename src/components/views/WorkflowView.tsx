@@ -63,9 +63,11 @@ export default function WorkflowView() {
   return (
     <div className="flex h-full">
       {/* Workflow Stepper - Left Panel */}
-      <div className="w-72 border-r bg-muted/30 p-4 flex flex-col">
-        <h3 className="font-semibold text-sm mb-1 px-2">Workflow Pipeline</h3>
-        <p className="text-xs text-muted-foreground mb-4 px-2">Follow each step to create your content</p>
+      <div className="w-72 border-r border-border/50 bg-muted/30 p-4 flex flex-col rounded-r-xl">
+        <div className="gradient-warm rounded-lg px-3 py-3 mb-4">
+          <h3 className="font-semibold text-sm">Workflow Pipeline</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Follow each step to create your content</p>
+        </div>
 
         <ScrollArea className="flex-1">
           <div className="space-y-1">
@@ -79,7 +81,7 @@ export default function WorkflowView() {
                   key={step.key}
                   onClick={() => setCurrentStep(step.key)}
                   className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all text-sm',
+                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-200 text-sm card-hover',
                     isActive
                       ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'hover:bg-accent',
@@ -89,11 +91,11 @@ export default function WorkflowView() {
                   {/* Step number / status indicator */}
                   <div
                     className={cn(
-                      'flex items-center justify-center w-7 h-7 rounded-full shrink-0 text-xs font-medium border-2 transition-colors',
+                      'flex items-center justify-center w-7 h-7 rounded-full shrink-0 text-xs font-medium border-2 transition-all duration-200',
                       isActive
                         ? 'border-primary-foreground bg-primary text-primary-foreground'
                         : status === 'completed'
-                          ? 'border-emerald-500 bg-emerald-500 text-white'
+                          ? 'border-primary bg-primary/10 text-primary'
                           : 'border-muted-foreground/30 bg-background text-muted-foreground'
                     )}
                   >
@@ -126,7 +128,7 @@ export default function WorkflowView() {
         </ScrollArea>
 
         {/* Project Info */}
-        <div className="border-t pt-3 mt-3 px-2">
+        <div className="border-t border-border/50 pt-3 mt-3 px-2">
           <div className="text-xs text-muted-foreground">
             <span className="font-medium">Project:</span>{' '}
             <span className="truncate block">{currentProject.title}</span>

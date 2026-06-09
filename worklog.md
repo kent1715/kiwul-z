@@ -95,3 +95,31 @@ Stage Summary:
 - All views verified working in browser
 - No runtime errors in dev log
 - Lint passes clean
+
+---
+Task ID: 16
+Agent: Main Agent
+Task: Redesign color scheme to professional and elegant warm neutral + amber/gold
+
+Work Log:
+- Replaced entire color scheme from emerald/teal (oklch hue 155-160) to warm neutral + amber/gold (HSL hue 30-38)
+- Rewrote globals.css with HSL-based color variables for predictable browser rendering
+- Light theme: warm off-white background (#f9f6f2), rich amber primary (#b45309), warm gray neutrals
+- Dark theme: deep warm charcoal background (#1a1612), bright amber/gold primary (#d97706), warm dark neutrals
+- Sidebar: dark warm charcoal (#060402) with amber/gold accents for active items
+- Added premium CSS utilities: card-hover, glow-primary, gradient-warm, glass
+- Redesigned page.tsx sidebar with premium Clapperboard icon, gradient logo, refined project info card
+- Updated all 6 view components: ProjectListView, WorkflowView, StoryboardView, CharacterView, ProviderView, CreateProjectDialog
+- Updated all 10 step components: IdeaStep, StorylineStep, ScriptStep, StoryboardStep, CharacterStep, LocationStep, ImagesStep, VideosStep, VoiceStep, RenderStep
+- Replaced all emerald-500/teal colors with amber/gold equivalents
+- Status badges now use warm stone/amber/orange/rose tones
+- Empty states use bg-primary/5 for warm subtle backgrounds
+- Cards use card-hover for premium lift effect and border-border/50 for subtlety
+- Browser verification: primary color renders as #e0843e (warm amber), sidebar is #060402 (warm charcoal), zero green colors found
+- Lint passes clean
+
+Stage Summary:
+- Complete visual redesign from emerald/teal to warm neutral + amber/gold
+- Professional and elegant look inspired by Linear/Notion/Raycast
+- All 16 component files updated with refined styling
+- HSL-based CSS variables for reliable cross-browser rendering

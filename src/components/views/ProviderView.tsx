@@ -27,11 +27,11 @@ import { useState, useEffect } from 'react'
 import { useToast } from '@/hooks/use-toast'
 
 const PROVIDER_TYPE_CONFIG: Record<string, { icon: React.ElementType; label: string; color: string }> = {
-  llm: { icon: Cpu, label: 'LLM Provider', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' },
-  image: { icon: ImageIcon, label: 'Image Provider', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' },
-  tts: { icon: Mic, label: 'TTS Provider', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' },
-  video: { icon: Film, label: 'Video Provider', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300' },
-  render: { icon: Film, label: 'Render Provider', color: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' },
+  llm: { icon: Cpu, label: 'LLM Provider', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+  image: { icon: ImageIcon, label: 'Image Provider', color: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' },
+  tts: { icon: Mic, label: 'TTS Provider', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
+  video: { icon: Film, label: 'Video Provider', color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200' },
+  render: { icon: Film, label: 'Render Provider', color: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' },
 }
 
 export default function ProviderView() {
@@ -179,7 +179,7 @@ export default function ProviderView() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {typeProviders.map((provider) => (
-                    <Card key={provider.id} className={provider.is_active ? '' : 'opacity-60'}>
+                    <Card key={provider.id} className={`card-hover border-border/50 transition-all duration-200 ${provider.is_active ? '' : 'opacity-60'}`}>
                       <CardHeader className="pb-3">
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-base flex items-center gap-2">
@@ -200,7 +200,7 @@ export default function ProviderView() {
                               className="flex items-center gap-1"
                             >
                               {provider.is_active ? (
-                                <Badge className="bg-emerald-500 text-white gap-1 text-[10px]">
+                                <Badge className="bg-amber-500 text-white gap-1 text-[10px]">
                                   <Wifi className="h-2.5 w-2.5" /> Active
                                 </Badge>
                               ) : (
@@ -258,7 +258,7 @@ export default function ProviderView() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="gap-1 h-7 text-xs"
+                            className="gap-1.5 h-7 text-xs transition-all duration-200 hover:border-primary/50"
                             onClick={() => testConnection(provider.id)}
                             disabled={testing === provider.id}
                           >

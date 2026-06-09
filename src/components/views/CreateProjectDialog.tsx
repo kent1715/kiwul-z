@@ -144,20 +144,20 @@ export default function CreateProjectDialog() {
   return (
     <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
       <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto custom-scrollbar">
-        <DialogHeader>
+        <DialogHeader className="gradient-warm rounded-lg -mx-1 -mt-1 px-5 py-4 mb-2">
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
             Create New Project
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-muted-foreground">
             Set up your content creation project. AI will help generate ideas, scripts, and media.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5 mt-4">
+        <form onSubmit={handleSubmit} className="space-y-5 mt-2">
           {/* Title */}
           <div className="space-y-2">
-            <Label htmlFor="title">
+            <Label htmlFor="title" className="text-muted-foreground">
               Title <span className="text-destructive">*</span>
             </Label>
             <Input
@@ -166,12 +166,13 @@ export default function CreateProjectDialog() {
               value={form.title}
               onChange={(e) => updateForm('title', e.target.value)}
               required
+              className="transition-all duration-200"
             />
           </div>
 
           {/* Topic */}
           <div className="space-y-2">
-            <Label htmlFor="topic">
+            <Label htmlFor="topic" className="text-muted-foreground">
               Topic <span className="text-destructive">*</span>
             </Label>
             <Textarea
@@ -181,14 +182,15 @@ export default function CreateProjectDialog() {
               onChange={(e) => updateForm('topic', e.target.value)}
               rows={3}
               required
+              className="transition-all duration-200"
             />
           </div>
 
           {/* Niche */}
           <div className="space-y-2">
-            <Label>Niche</Label>
+            <Label className="text-muted-foreground">Niche</Label>
             <Select value={form.niche} onValueChange={(v) => updateForm('niche', v)}>
-              <SelectTrigger>
+              <SelectTrigger className="transition-all duration-200">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -203,7 +205,7 @@ export default function CreateProjectDialog() {
 
           {/* Target Platform */}
           <div className="space-y-2">
-            <Label>Target Platform</Label>
+            <Label className="text-muted-foreground">Target Platform</Label>
             <div className="flex flex-wrap gap-4">
               {PLATFORMS.map((p) => (
                 <div key={p.id} className="flex items-center gap-2">
@@ -223,9 +225,9 @@ export default function CreateProjectDialog() {
           {/* Language & Duration */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Language</Label>
+              <Label className="text-muted-foreground">Language</Label>
               <Select value={form.language} onValueChange={(v) => updateForm('language', v)}>
-                <SelectTrigger>
+                <SelectTrigger className="transition-all duration-200">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -240,7 +242,7 @@ export default function CreateProjectDialog() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Duration: {form.duration}s</Label>
+              <Label className="text-muted-foreground">Duration: {form.duration}s</Label>
               <Slider
                 value={[form.duration]}
                 onValueChange={([v]) => updateForm('duration', v)}
@@ -259,9 +261,9 @@ export default function CreateProjectDialog() {
           {/* Aspect Ratio & Resolution */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Aspect Ratio</Label>
+              <Label className="text-muted-foreground">Aspect Ratio</Label>
               <Select value={form.aspect_ratio} onValueChange={(v) => updateForm('aspect_ratio', v)}>
-                <SelectTrigger>
+                <SelectTrigger className="transition-all duration-200">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -272,9 +274,9 @@ export default function CreateProjectDialog() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Resolution</Label>
+              <Label className="text-muted-foreground">Resolution</Label>
               <Select value={form.resolution} onValueChange={(v) => updateForm('resolution', v)}>
-                <SelectTrigger>
+                <SelectTrigger className="transition-all duration-200">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -287,39 +289,42 @@ export default function CreateProjectDialog() {
 
           {/* Visual Style */}
           <div className="space-y-2">
-            <Label htmlFor="visual_style">Visual Style</Label>
+            <Label htmlFor="visual_style" className="text-muted-foreground">Visual Style</Label>
             <Input
               id="visual_style"
               placeholder="e.g., realistic cinematic vertical"
               value={form.visual_style}
               onChange={(e) => updateForm('visual_style', e.target.value)}
+              className="transition-all duration-200"
             />
           </div>
 
           {/* Tone & Audience */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="tone">Tone</Label>
+              <Label htmlFor="tone" className="text-muted-foreground">Tone</Label>
               <Input
                 id="tone"
                 placeholder="e.g., energetic, fun"
                 value={form.tone}
                 onChange={(e) => updateForm('tone', e.target.value)}
+                className="transition-all duration-200"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="audience">Audience</Label>
+              <Label htmlFor="audience" className="text-muted-foreground">Audience</Label>
               <Input
                 id="audience"
                 placeholder="e.g., Gen Z food lovers"
                 value={form.audience}
                 onChange={(e) => updateForm('audience', e.target.value)}
+                className="transition-all duration-200"
               />
             </div>
           </div>
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-4 border-t border-border/50">
             <Button type="button" variant="outline" onClick={() => setShowCreateDialog(false)}>
               Cancel
             </Button>

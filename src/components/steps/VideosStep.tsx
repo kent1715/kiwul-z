@@ -113,7 +113,7 @@ export default function VideosStep() {
 
       {scenes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center mb-4">
             <Video className="h-8 w-8 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-semibold mb-2">No scenes found</h3>
@@ -135,7 +135,7 @@ export default function VideosStep() {
             {scenes
               .sort((a, b) => a.scene_number - b.scene_number)
               .map((scene) => (
-                <Card key={scene.id} className="overflow-hidden">
+                <Card key={scene.id} className="overflow-hidden card-hover border-border/50">
                   {/* Video Area */}
                   <div className="aspect-[9/16] max-h-48 relative bg-muted">
                     {scene.video_path ? (
@@ -147,7 +147,7 @@ export default function VideosStep() {
                     ) : generatingScenes.has(scene.id) ? (
                       <div className="w-full h-full flex flex-col items-center justify-center gap-2">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        <span className="text-xs text-muted-foreground">Generating video...</span>
+                        <span className="text-xs text-primary/70">Generating video...</span>
                       </div>
                     ) : scene.image_path ? (
                       <div className="w-full h-full relative">
