@@ -1,0 +1,9 @@
+{
+  "name": "ltxv-proxy",
+  "version": "1.0.0",
+  "description": "LTX-Video I2V proxy for Kiwul-Z — OpenAI-compatible API with ComfyUI backend",
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {}
+}

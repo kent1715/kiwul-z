@@ -1,0 +1,15 @@
+{
+  "_comment": "Replace this with your actual LTXV I2V ComfyUI workflow JSON. Export from ComfyUI using 'Save (API Format)'.",
+  "_instructions": [
+    "1. Open ComfyUI",
+    "2. Load your LTXV I2V workflow",
+    "3. Click 'Save (API Format)' and replace this file with the output",
+    "4. The proxy will auto-patch LoadImage nodes with the selected input image"
+  ],
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "placeholder.png"
+    }
+  }
+}
