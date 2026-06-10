@@ -3,17 +3,10 @@ import { openAIEndpoint } from '../url'
 import { writeFileSync, mkdirSync, copyFileSync, existsSync, readdirSync, statSync } from 'fs'
 import { dirname, join, resolve } from 'path'
 
-export async function testConnection(config: VideoConfig): Promise<TestResult> {
-  const start = Date.now()
-  try {
-    const res = await fetch(openAIEndpoint(config.base_url, '/models'), { signal: AbortSignal.timeout(10000) })
-    if (!res.ok) return { success: false, message: `HTTP ${res.status}` }
-    return { success: true, message: 'LTX video provider reachable.', latency_ms: Date.now() - start }
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    return { success: false, message: `Connection failed: ${message}` }
-  }
-}
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.webm']
+const MIN_VIDEO_BYTES = 1000
 
 /**
  * Extract job/event/video ID from submit response.
@@ -23,13 +16,11 @@ function extractJobId(data: unknown): string | null {
   if (!data || typeof data !== 'object') return null
   const d = data as Record<string, unknown>
 
-  // Top-level fields
   if (typeof d.id === 'string' && d.id) return d.id
   if (typeof d.job_id === 'string' && d.job_id) return d.job_id
   if (typeof d.video_id === 'string' && d.video_id) return d.video_id
   if (typeof d.event_id === 'string' && d.event_id) return d.event_id
 
-  // Nested inside data
   const inner = d.data
   if (inner && typeof inner === 'object') {
     const dd = inner as Record<string, unknown>
@@ -44,16 +35,14 @@ function extractJobId(data: unknown): string | null {
 
 /**
  * Extract output path/URL from final (completed) polling response.
- * Supports many formats from various ComfyUI / LTX proxy implementations:
- *   video_path, path, file, filename, url, video_url, output,
- *   outputs[0], data.video_path, data.path, data.url, data.output, data.outputs[0]
+ * Supports many formats from various ComfyUI / LTX proxy implementations.
  */
 function extractOutputPath(data: unknown): string | null {
   if (!data || typeof data !== 'object') return null
   const d = data as Record<string, unknown>
 
-  // Top-level string fields
-  for (const key of ['video_path', 'path', 'file', 'filename', 'url', 'video_url', 'output']) {
+  // Top-level string fields (ordered by specificity)
+  for (const key of ['file_path', 'video_path', 'path', 'output', 'url', 'video_url']) {
     if (typeof d[key] === 'string' && d[key]) return d[key] as string
   }
 
@@ -63,10 +52,9 @@ function extractOutputPath(data: unknown): string | null {
     if (typeof first === 'string' && first) return first
     if (typeof first === 'object' && first !== null) {
       const obj = first as Record<string, unknown>
-      if (typeof obj.path === 'string' && obj.path) return obj.path
-      if (typeof obj.url === 'string' && obj.url) return obj.url
-      if (typeof obj.file === 'string' && obj.file) return obj.file
-      if (typeof obj.video_path === 'string' && obj.video_path) return obj.video_path
+      for (const key of ['file_path', 'video_path', 'path', 'url', 'file']) {
+        if (typeof obj[key] === 'string' && obj[key]) return obj[key] as string
+      }
     }
   }
 
@@ -74,7 +62,7 @@ function extractOutputPath(data: unknown): string | null {
   const inner = d.data
   if (inner && typeof inner === 'object') {
     const dd = inner as Record<string, unknown>
-    for (const key of ['video_path', 'path', 'url', 'output']) {
+    for (const key of ['file_path', 'video_path', 'path', 'url', 'output']) {
       if (typeof dd[key] === 'string' && dd[key]) return dd[key] as string
     }
     if (Array.isArray(dd.outputs) && dd.outputs.length > 0) {
@@ -82,9 +70,9 @@ function extractOutputPath(data: unknown): string | null {
       if (typeof first === 'string' && first) return first
       if (typeof first === 'object' && first !== null) {
         const obj = first as Record<string, unknown>
-        if (typeof obj.path === 'string' && obj.path) return obj.path
-        if (typeof obj.url === 'string' && obj.url) return obj.url
-        if (typeof obj.video_path === 'string' && obj.video_path) return obj.video_path
+        for (const key of ['file_path', 'video_path', 'path', 'url']) {
+          if (typeof obj[key] === 'string' && obj[key]) return obj[key] as string
+        }
       }
     }
   }
@@ -93,83 +81,130 @@ function extractOutputPath(data: unknown): string | null {
 }
 
 /**
- * Find the most recently modified .mp4 file in a directory (recursively, 1 level deep)
- * that was modified after the given timestamp.
+ * Find the most recently modified video file (.mp4/.mov/.webm) in a directory
+ * (and one level of subdirectories) that:
+ *   - LastWriteTime >= afterMs - 10_000 (10 second tolerance)
+ *   - file size > MIN_VIDEO_BYTES
  */
-function findNewestMp4(dir: string, afterMs: number): string | null {
+function findNewestVideo(dir: string, afterMs: number): string | null {
   if (!existsSync(dir)) return null
 
+  const cutoff = afterMs - 10_000 // 10 second tolerance
   let bestPath: string | null = null
   let bestTime = 0
 
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true })
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name)
-      try {
-        const st = statSync(fullPath)
-        if (!st.isFile()) continue
-        if (!fullPath.toLowerCase().endsWith('.mp4')) continue
-        if (st.mtimeMs < afterMs) continue
-        if (st.mtimeMs > bestTime) {
-          bestTime = st.mtimeMs
-          bestPath = fullPath
-        }
-      } catch {
-        // skip unreadable files
-      }
+  function checkEntry(fullPath: string, st: { mtimeMs: number; size: number; isFile(): boolean }) {
+    if (!st.isFile()) return
+    const lower = fullPath.toLowerCase()
+    if (!VIDEO_EXTENSIONS.some((ext) => lower.endsWith(ext))) return
+    if (st.mtimeMs < cutoff) return
+    if (st.size <= MIN_VIDEO_BYTES) return
+    if (st.mtimeMs > bestTime) {
+      bestTime = st.mtimeMs
+      bestPath = fullPath
     }
-  } catch {
-    // dir not readable
   }
 
-  // Also check subdirectories one level deep (e.g. "generated/")
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true })
+  function scanDir(dirPath: string, depth: number) {
+    let entries: ReturnType<typeof readdirSync>
+    try {
+      entries = readdirSync(dirPath, { withFileTypes: true })
+    } catch {
+      return
+    }
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue
-      const subDir = join(dir, entry.name)
+      const fullPath = join(dirPath, entry.name)
       try {
-        const subEntries = readdirSync(subDir, { withFileTypes: true })
-        for (const subEntry of subEntries) {
-          const fullPath = join(subDir, subEntry.name)
-          try {
-            const st = statSync(fullPath)
-            if (!st.isFile()) continue
-            if (!fullPath.toLowerCase().endsWith('.mp4')) continue
-            if (st.mtimeMs < afterMs) continue
-            if (st.mtimeMs > bestTime) {
-              bestTime = st.mtimeMs
-              bestPath = fullPath
-            }
-          } catch {
-            // skip
-          }
+        if (entry.isFile()) {
+          const st = statSync(fullPath)
+          checkEntry(fullPath, st)
+        } else if (entry.isDirectory() && depth < 2) {
+          scanDir(fullPath, depth + 1)
         }
       } catch {
-        // subdirectory not readable
+        // skip unreadable
       }
     }
-  } catch {
-    // ignore
   }
 
+  scanDir(dir, 0)
   return bestPath
 }
 
 /**
- * Copy source file to destination, creating directories as needed.
- * Returns the destination path on success, throws on failure.
+ * Try to resolve a relative or partial path using multiple base directories.
  */
-function copyToOutput(srcPath: string, destPath: string): string {
+function resolvePathWithFallbacks(partialPath: string, proxyDir: string): string | null {
+  if (existsSync(partialPath)) return partialPath
+
+  const candidates = [resolve(process.cwd(), partialPath)]
+
+  if (proxyDir) {
+    candidates.push(resolve(proxyDir, partialPath))
+    candidates.push(join(proxyDir, partialPath))
+    candidates.push(resolve(proxyDir, 'generated', partialPath))
+    candidates.push(join(proxyDir, 'generated', partialPath))
+  }
+
+  // Hardcoded fallback for common Windows proxy setup
+  candidates.push(resolve('D:\\local-video-proxy', partialPath))
+  candidates.push(join('D:\\local-video-proxy', partialPath))
+  candidates.push(resolve('D:\\local-video-proxy', 'generated', partialPath))
+  candidates.push(join('D:\\local-video-proxy', 'generated', partialPath))
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate
+  }
+
+  return null
+}
+
+/**
+ * Copy source video to outputPath, creating directories as needed.
+ * Verifies the destination file exists and is > MIN_VIDEO_BYTES.
+ */
+function copyAndVerify(srcPath: string, destPath: string): void {
   if (!existsSync(srcPath)) {
-    throw new Error(`Source video file does not exist: ${srcPath}`)
+    throw new Error(`[LTX] Source video file does not exist: ${srcPath}`)
   }
   mkdirSync(dirname(destPath), { recursive: true })
   copyFileSync(srcPath, destPath)
+
+  if (!existsSync(destPath)) {
+    throw new Error(`[LTX] Copy succeeded but destination not found: ${destPath}`)
+  }
   const st = statSync(destPath)
-  console.log(`[video.ltx] Copied ${srcPath} → ${destPath} (${st.size} bytes)`)
-  return destPath
+  if (st.size <= MIN_VIDEO_BYTES) {
+    throw new Error(`[LTX] Copied video too small (${st.size} bytes): ${destPath}`)
+  }
+  console.log(`[LTX] Copied video to ${destPath} (${st.size} bytes)`)
+}
+
+/**
+ * Verify outputPath is a valid video file. Returns true if valid.
+ */
+function verifyOutput(outputPath: string): boolean {
+  if (!existsSync(outputPath)) return false
+  try {
+    const st = statSync(outputPath)
+    return st.size > MIN_VIDEO_BYTES
+  } catch {
+    return false
+  }
+}
+
+// ── Public API ─────────────────────────────────────────────────────────────
+
+export async function testConnection(config: VideoConfig): Promise<TestResult> {
+  const start = Date.now()
+  try {
+    const res = await fetch(openAIEndpoint(config.base_url, '/models'), { signal: AbortSignal.timeout(10000) })
+    if (!res.ok) return { success: false, message: `HTTP ${res.status}` }
+    return { success: true, message: 'LTX video provider reachable.', latency_ms: Date.now() - start }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    return { success: false, message: `Connection failed: ${message}` }
+  }
 }
 
 export async function generateVideo(
@@ -180,11 +215,17 @@ export async function generateVideo(
   options?: { duration?: number; fps?: number; resolution?: string; seed?: number }
 ): Promise<VideoGenerationResult> {
   const timeoutMs = Number(process.env.LTX_TIMEOUT_MS || 900000)
-  const proxyDir = process.env.LTX_PROXY_DIR || ''
+  const proxyDir = process.env.LTX_PROXY_DIR || 'D:\\local-video-proxy'
+  const startedAt = Date.now()
 
   const duration = options?.duration || config.duration || 3
   const fps = options?.fps || config.fps || 24
   const resolution = options?.resolution || config.resolution || '768x1024'
+
+  console.log(`[LTX] startedAt: ${new Date(startedAt).toISOString()}`)
+  console.log(`[LTX] outputPath: ${outputPath}`)
+  console.log(`[LTX] proxyDir: ${proxyDir}`)
+  console.log(`[LTX] timeoutMs: ${timeoutMs}`)
 
   const body: Record<string, unknown> = {
     model: config.model || 'comfy-ltxv-i2v',
@@ -197,14 +238,12 @@ export async function generateVideo(
   if (options?.seed !== undefined) body.seed = options.seed
   if (config.motion_strength) body.motion_strength = config.motion_strength
 
-  // ── Submit request ──────────────────────────────────────────────────────
+  // ── 1. Submit request ─────────────────────────────────────────────────
   const submitUrl = openAIEndpoint(config.base_url, '/videos')
-  console.log(`[video.ltx] POST ${submitUrl} model=${body.model} duration=${duration}fps=${fps} resolution=${resolution} timeout=${timeoutMs}ms`)
+  console.log(`[LTX] Submit POST ${submitUrl}`)
 
   const submitController = new AbortController()
   const submitTimeout = setTimeout(() => submitController.abort(), timeoutMs)
-
-  const jobStartTime = Date.now()
 
   let res: Response
   try {
@@ -216,8 +255,11 @@ export async function generateVideo(
     })
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === 'AbortError') {
+      // Even on timeout, try fallback before throwing
+      const fallback = tryFallbackNewestVideo(proxyDir, startedAt, outputPath)
+      if (fallback) return fallback
       throw new Error(
-        `LTX submit request timed out after ${timeoutMs} ms. Increase LTX_TIMEOUT_MS or reduce resolution.`
+        `LTX submit timed out after ${timeoutMs} ms. Increase LTX_TIMEOUT_MS.`
       )
     }
     throw err
@@ -225,80 +267,81 @@ export async function generateVideo(
     clearTimeout(submitTimeout)
   }
 
-  console.log(`[video.ltx] Submit response status: ${res.status}`)
+  console.log(`[LTX] Submit response status: ${res.status}`)
 
   if (!res.ok) {
     const errText = await res.text()
-    throw new Error(`Video generation submit failed (${res.status}): ${errText.substring(0, 1000)}`)
+    throw new Error(`Video submit failed (${res.status}): ${errText.substring(0, 1000)}`)
   }
 
   const submitData: unknown = await res.json()
   const submitPreview = JSON.stringify(submitData).substring(0, 1000)
-  console.log(`[video.ltx] Submit response preview: ${submitPreview}`)
+  console.log(`[LTX] Submit response: ${submitPreview}`)
 
-  // ── Handle sync response (video data directly in submit response) ──────
-  if (
-    (submitData && typeof submitData === 'object' &&
-      ((submitData as Record<string, unknown>).video ||
-        (submitData as Record<string, unknown>).data &&
-        Array.isArray((submitData as Record<string, unknown>).data) &&
-        ((submitData as Record<string, unknown>).data as unknown[])[0] &&
-        typeof ((submitData as Record<string, unknown>).data as unknown[])[0] === 'object' &&
-        (((submitData as Record<string, unknown>).data as Record<string, unknown>[])[0] as Record<string, unknown>).video))
-  ) {
+  // ── 2. Try extracting output directly from submit response ────────────
+  const directPath = extractOutputPath(submitData)
+  if (directPath) {
+    console.log(`[LTX] Direct output from submit response: ${directPath}`)
+    const resolved = resolveAndCopy(directPath, proxyDir, outputPath)
+    if (resolved) return resolved
+  }
+
+  // ── 3. Handle sync b64/url response ───────────────────────────────────
+  if (submitData && typeof submitData === 'object') {
     const d = submitData as Record<string, unknown>
-    const videoData = (d.video || (d.data as Record<string, unknown>[])?.[0]?.video) as Record<string, unknown> | undefined
-
-    if (videoData) {
+    const videoObj = d.video || (Array.isArray(d.data) && d.data[0] && (d.data[0] as Record<string, unknown>).video)
+    if (videoObj && typeof videoObj === 'object') {
+      const vd = videoObj as Record<string, unknown>
       mkdirSync(dirname(outputPath), { recursive: true })
 
-      if (videoData.b64_json && typeof videoData.b64_json === 'string') {
-        writeFileSync(outputPath, Buffer.from(videoData.b64_json, 'base64'))
-        console.log(`[video.ltx] Sync response: wrote b64 video to ${outputPath}`)
-        return { file_path: outputPath, duration }
-      }
-      if (videoData.url && typeof videoData.url === 'string') {
-        console.log(`[video.ltx] Sync response: downloading from ${videoData.url.substring(0, 100)}`)
-        const vidRes = await fetch(videoData.url, { signal: AbortSignal.timeout(120000) })
-        if (!vidRes.ok) throw new Error('Failed to download video from sync response URL')
-        writeFileSync(outputPath, Buffer.from(await vidRes.arrayBuffer()))
-        return { file_path: outputPath, duration }
-      }
-      if (videoData.path && typeof videoData.path === 'string') {
-        const srcPath = videoData.path as string
-        if (existsSync(srcPath)) {
-          copyToOutput(srcPath, outputPath)
+      if (typeof vd.b64_json === 'string' && vd.b64_json) {
+        writeFileSync(outputPath, Buffer.from(vd.b64_json, 'base64'))
+        if (verifyOutput(outputPath)) {
+          console.log(`[LTX] Sync b64 video saved: ${outputPath}`)
           return { file_path: outputPath, duration }
         }
-        // If path doesn't exist, try resolving
-        const resolved = resolvePathWithFallbacks(srcPath, proxyDir)
-        if (resolved && existsSync(resolved)) {
-          copyToOutput(resolved, outputPath)
-          return { file_path: outputPath, duration }
+      }
+
+      if (typeof vd.url === 'string' && vd.url) {
+        console.log(`[LTX] Downloading sync video from: ${vd.url.substring(0, 100)}`)
+        const vidRes = await fetch(vd.url, { signal: AbortSignal.timeout(120000) })
+        if (vidRes.ok) {
+          writeFileSync(outputPath, Buffer.from(await vidRes.arrayBuffer()))
+          if (verifyOutput(outputPath)) {
+            console.log(`[LTX] Sync URL video saved: ${outputPath}`)
+            return { file_path: outputPath, duration }
+          }
         }
-        console.log(`[video.ltx] Sync response video path not found: ${srcPath}`)
       }
     }
   }
 
-  // ── Handle async response (job ID → poll) ──────────────────────────────
+  // ── 4. Extract job ID and poll ────────────────────────────────────────
   const jobId = extractJobId(submitData)
   if (!jobId) {
+    // No job ID — try fallback before throwing
+    const fallback = tryFallbackNewestVideo(proxyDir, startedAt, outputPath)
+    if (fallback) return fallback
+
     throw new Error(
-      `Could not extract job ID from submit response. Tried: id, job_id, video_id, event_id, data.id, data.job_id, data.video_id, data.event_id. Response preview: ${submitPreview}`
+      `Could not extract job ID from submit response. Tried: id, job_id, video_id, event_id, data.id, data.job_id, data.video_id, data.event_id. Response: ${submitPreview}`
     )
   }
-  console.log(`[video.ltx] Job ID: ${jobId}`)
+  console.log(`[LTX] Job ID: ${jobId}`)
 
   const pollUrl = openAIEndpoint(config.base_url, `/videos/${jobId}`)
-  console.log(`[video.ltx] Polling endpoint: ${pollUrl}`)
+  console.log(`[LTX] Polling endpoint: ${pollUrl}`)
 
-  // ── Poll for completion ─────────────────────────────────────────────────
+  // ── 5. Poll for completion ────────────────────────────────────────────
   const maxAttempts = Math.ceil(timeoutMs / 5000)
   const pollIntervalMs = 5000
+  const overallDeadline = startedAt + timeoutMs
 
   let finalData: Record<string, unknown> | null = null
+
   for (let i = 0; i < maxAttempts; i++) {
+    if (Date.now() > overallDeadline) break
+
     const pollController = new AbortController()
     const pollTimeout = setTimeout(() => pollController.abort(), 30000)
 
@@ -307,7 +350,7 @@ export async function generateVideo(
       pollRes = await fetch(pollUrl, { signal: pollController.signal })
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') {
-        console.log(`[video.ltx] Poll request #${i + 1} timed out (30s), retrying...`)
+        console.log(`[LTX] Poll #${i + 1} timed out (30s), retrying...`)
         continue
       }
       throw err
@@ -316,17 +359,28 @@ export async function generateVideo(
     }
 
     if (!pollRes.ok) {
-      console.log(`[video.ltx] Poll request #${i + 1} failed: HTTP ${pollRes.status}`)
+      console.log(`[LTX] Poll #${i + 1} failed: HTTP ${pollRes.status}`)
       await new Promise((r) => setTimeout(r, pollIntervalMs))
       continue
     }
 
-    const pollData: unknown = await pollRes.json()
-    const pollPreview = JSON.stringify(pollData).substring(0, 1000)
-    console.log(`[video.ltx] Poll #${i + 1} preview: ${pollPreview}`)
+    let pollData: unknown
+    try {
+      pollData = await pollRes.json()
+    } catch {
+      console.log(`[LTX] Poll #${i + 1} invalid JSON response`)
+      await new Promise((r) => setTimeout(r, pollIntervalMs))
+      continue
+    }
 
-    const status = String((pollData as Record<string, unknown>)?.status || (pollData as Record<string, unknown>)?.state || '').toLowerCase()
-    console.log(`[video.ltx] Poll #${i + 1} status: "${status}"`)
+    const pollPreview = JSON.stringify(pollData).substring(0, 1000)
+    console.log(`[LTX] Poll #${i + 1} response: ${pollPreview}`)
+
+    const status = String(
+      (pollData as Record<string, unknown>)?.status ||
+      (pollData as Record<string, unknown>)?.state || ''
+    ).toLowerCase()
+    console.log(`[LTX] Poll #${i + 1} status: "${status}"`)
 
     if (status === 'completed' || status === 'done' || status === 'success') {
       finalData = pollData as Record<string, unknown>
@@ -339,104 +393,151 @@ export async function generateVideo(
         (pollData as Record<string, unknown>)?.message ||
         'Video generation failed'
       )
+      // Even on failed status, try fallback — the file might already exist
+      const fallback = tryFallbackNewestVideo(proxyDir, startedAt, outputPath)
+      if (fallback) return fallback
       throw new Error(`LTX video generation failed: ${errMsg}`)
     }
 
-    // Still processing — wait before next poll
     await new Promise((r) => setTimeout(r, pollIntervalMs))
   }
 
+  // ── 6. If polling timed out, try fallback before throwing ─────────────
   if (!finalData) {
+    console.log(`[LTX] Polling timed out after ${timeoutMs} ms. Trying fallback newest video...`)
+    const fallback = tryFallbackNewestVideo(proxyDir, startedAt, outputPath)
+    if (fallback) return fallback
+
     throw new Error(
       `LTX video generation timed out after ${timeoutMs} ms (job ${jobId}). Increase LTX_TIMEOUT_MS.`
     )
   }
 
-  // ── Extract output from completed response ──────────────────────────────
+  // ── 7. Extract output from completed response ─────────────────────────
+  console.log(`[LTX] Poll response summary: status=completed, keys=${Object.keys(finalData).join(',')}`)
+
   const outputStr = extractOutputPath(finalData)
-  console.log(`[video.ltx] Output path/url from response: ${outputStr || '(none)'}`)
-  console.log(`[video.ltx] Destination output path: ${outputPath}`)
+  console.log(`[LTX] Resolved video path from response: ${outputStr || '(none)'}`)
 
   mkdirSync(dirname(outputPath), { recursive: true })
 
   if (outputStr) {
-    // Case 1: It's an HTTP URL — download it
+    // Case A: HTTP URL → download
     if (outputStr.startsWith('http://') || outputStr.startsWith('https://')) {
-      console.log(`[video.ltx] Downloading video from URL: ${outputStr.substring(0, 100)}`)
+      console.log(`[LTX] Downloading video from URL: ${outputStr.substring(0, 100)}`)
       const vidRes = await fetch(outputStr, { signal: AbortSignal.timeout(120000) })
-      if (!vidRes.ok) throw new Error(`Failed to download video from URL (${vidRes.status})`)
+      if (!vidRes.ok) throw new Error(`Failed to download video (${vidRes.status})`)
       writeFileSync(outputPath, Buffer.from(await vidRes.arrayBuffer()))
-      const st = statSync(outputPath)
-      console.log(`[video.ltx] Downloaded video to ${outputPath} (${st.size} bytes)`)
-      return { file_path: outputPath, duration }
+      if (verifyOutput(outputPath)) {
+        const sz = statSync(outputPath).size
+        console.log(`[LTX] Final file size: ${sz} bytes`)
+        return { file_path: outputPath, duration }
+      }
+      console.log(`[LTX] Downloaded video failed verification, trying fallback...`)
     }
 
-    // Case 2: It's an absolute Windows path (e.g. D:\local-video-proxy\generated\xxx.mp4)
-    if (existsSync(outputStr)) {
-      copyToOutput(outputStr, outputPath)
-      return { file_path: outputPath, duration }
-    }
+    // Case B: Absolute path that exists → copy
+    const resolved = resolveAndCopy(outputStr, proxyDir, outputPath)
+    if (resolved) return resolved
 
-    // Case 3: Try resolving relative path with fallbacks
-    const resolved = resolvePathWithFallbacks(outputStr, proxyDir)
-    if (resolved && existsSync(resolved)) {
-      copyToOutput(resolved, outputPath)
-      return { file_path: outputPath, duration }
-    }
-
-    console.log(`[video.ltx] Could not resolve output path: ${outputStr}`)
+    console.log(`[LTX] Could not resolve output path: ${outputStr}`)
   }
 
-  // ── Fallback: status completed but no path — search for newest mp4 ──────
-  console.log(`[video.ltx] No output path found in response. Searching for newest mp4 in proxy directories...`)
+  // ── 8. Fallback: search for newest video file ─────────────────────────
+  const fallback = tryFallbackNewestVideo(proxyDir, startedAt, outputPath)
+  if (fallback) return fallback
 
-  const searchDirs = [
-    proxyDir ? join(proxyDir, 'generated') : '',
-    proxyDir || '',
-    join(process.cwd(), 'generated'),
-    'D:\\local-video-proxy\\generated',
-    'D:\\local-video-proxy',
-  ].filter(Boolean)
-
-  for (const searchDir of searchDirs) {
-    const found = findNewestMp4(searchDir, jobStartTime)
-    if (found) {
-      console.log(`[video.ltx] Found newest mp4: ${found}`)
-      copyToOutput(found, outputPath)
-      return { file_path: outputPath, duration }
-    }
-  }
-
-  // ── Nothing found — clear error ─────────────────────────────────────────
+  // ── 9. Nothing found — clear error ────────────────────────────────────
   const finalPreview = JSON.stringify(finalData).substring(0, 1000)
   throw new Error(
-    `LTX video completed (job ${jobId}) but could not find output file. Tried path fields: video_path, path, file, filename, url, video_url, output, outputs[0], data.video_path, data.path, data.url, data.output, data.outputs[0]. Also searched for newest mp4 in: ${searchDirs.join(', ')}. Final response preview: ${finalPreview}`
+    `LTX video completed (job ${jobId}) but could not find output file. ` +
+    `Tried path fields: file_path, video_path, path, output, url, video_url, outputs[0], ` +
+    `data.file_path, data.video_path, data.path, data.url, data.output, data.outputs[0]. ` +
+    `Also searched for newest video in ${proxyDir}\\generated. ` +
+    `Final response: ${finalPreview}`
   )
 }
 
-/**
- * Try to resolve a relative or partial path using multiple base directories.
- */
-function resolvePathWithFallbacks(partialPath: string, proxyDir: string): string | null {
-  // Already absolute and exists
-  if (existsSync(partialPath)) return partialPath
+// ── Internal helpers ───────────────────────────────────────────────────────
 
-  const candidates = [
-    resolve(process.cwd(), partialPath),
+/**
+ * Try to resolve a path string (could be absolute Windows path, relative path, etc.)
+ * and copy it to outputPath. Returns VideoGenerationResult on success, null on failure.
+ */
+function resolveAndCopy(
+  rawPath: string,
+  proxyDir: string,
+  outputPath: string
+): VideoGenerationResult | null {
+  // Already an absolute path that exists
+  if (existsSync(rawPath)) {
+    console.log(`[LTX] Found absolute path: ${rawPath}`)
+    try {
+      copyAndVerify(rawPath, outputPath)
+      const sz = statSync(outputPath).size
+      console.log(`[LTX] Final file size: ${sz} bytes`)
+      return { file_path: outputPath, duration: 0 }
+    } catch (err) {
+      console.log(`[LTX] Copy failed for ${rawPath}: ${err instanceof Error ? err.message : err}`)
+      return null
+    }
+  }
+
+  // Try resolving with fallbacks
+  const resolved = resolvePathWithFallbacks(rawPath, proxyDir)
+  if (resolved) {
+    console.log(`[LTX] Resolved path: ${rawPath} → ${resolved}`)
+    try {
+      copyAndVerify(resolved, outputPath)
+      const sz = statSync(outputPath).size
+      console.log(`[LTX] Final file size: ${sz} bytes`)
+      return { file_path: outputPath, duration: 0 }
+    } catch (err) {
+      console.log(`[LTX] Copy failed for ${resolved}: ${err instanceof Error ? err.message : err}`)
+      return null
+    }
+  }
+
+  return null
+}
+
+/**
+ * Search proxy directories for the newest video file created after startedAt.
+ * If found, copy to outputPath and return VideoGenerationResult.
+ * Returns null if nothing found.
+ */
+function tryFallbackNewestVideo(
+  proxyDir: string,
+  startedAt: number,
+  outputPath: string
+): VideoGenerationResult | null {
+  console.log(`[LTX] Fallback: searching for newest video in proxy directories...`)
+
+  const searchDirs = [
+    join(proxyDir, 'generated'),
+    proxyDir,
+    join('D:\\local-video-proxy', 'generated'),
+    'D:\\local-video-proxy',
   ]
 
-  if (proxyDir) {
-    candidates.push(resolve(proxyDir, partialPath))
-    candidates.push(join(proxyDir, partialPath))
+  // Deduplicate
+  const uniqueDirs = [...new Set(searchDirs)]
+
+  for (const dir of uniqueDirs) {
+    const found = findNewestVideo(dir, startedAt)
+    if (found) {
+      console.log(`[LTX] Fallback newest video: ${found}`)
+      try {
+        copyAndVerify(found, outputPath)
+        const sz = statSync(outputPath).size
+        console.log(`[LTX] Final file size: ${sz} bytes`)
+        return { file_path: outputPath, duration: 0 }
+      } catch (err) {
+        console.log(`[LTX] Fallback copy failed: ${err instanceof Error ? err.message : err}`)
+      }
+    }
   }
 
-  // Hardcoded fallback for common Windows proxy setup
-  candidates.push(resolve('D:\\local-video-proxy', partialPath))
-  candidates.push(join('D:\\local-video-proxy', partialPath))
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate
-  }
-
+  console.log(`[LTX] Fallback: no video found in ${uniqueDirs.join(', ')}`)
   return null
 }
