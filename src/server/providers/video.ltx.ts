@@ -332,15 +332,20 @@ export async function generateVideo(
   const pollUrl = openAIEndpoint(config.base_url, `/videos/${jobId}`)
   console.log(`[LTX] Polling endpoint: ${pollUrl}`)
 
-  // ── 5. Poll for completion ────────────────────────────────────────────
+  // ── 5. Poll for completion (with aggressive fallback) ──────────────────
   const maxAttempts = Math.ceil(timeoutMs / 5000)
   const pollIntervalMs = 5000
   const overallDeadline = startedAt + timeoutMs
+  const FALLBACK_CHECK_AFTER_MS = 30_000 // Start checking fallback after 30s
 
   let finalData: Record<string, unknown> | null = null
 
   for (let i = 0; i < maxAttempts; i++) {
-    if (Date.now() > overallDeadline) break
+    const now = Date.now()
+    if (now > overallDeadline) break
+
+    const elapsed = now - startedAt
+    console.log(`[LTX] Poll #${i + 1} elapsed: ${elapsed} ms`)
 
     const pollController = new AbortController()
     const pollTimeout = setTimeout(() => pollController.abort(), 30000)
@@ -351,15 +356,29 @@ export async function generateVideo(
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         console.log(`[LTX] Poll #${i + 1} timed out (30s), retrying...`)
-        continue
+      } else {
+        throw err
       }
-      throw err
+
+      // Even on poll timeout, check fallback if enough time has passed
+      if (elapsed >= FALLBACK_CHECK_AFTER_MS) {
+        const fallback = tryFallbackNewestVideo(proxyDir, startedAt, outputPath)
+        if (fallback) return fallback
+      }
+      continue
     } finally {
       clearTimeout(pollTimeout)
     }
 
     if (!pollRes.ok) {
       console.log(`[LTX] Poll #${i + 1} failed: HTTP ${pollRes.status}`)
+
+      // Check fallback even on HTTP error
+      if (elapsed >= FALLBACK_CHECK_AFTER_MS) {
+        const fallback = tryFallbackNewestVideo(proxyDir, startedAt, outputPath)
+        if (fallback) return fallback
+      }
+
       await new Promise((r) => setTimeout(r, pollIntervalMs))
       continue
     }
@@ -369,6 +388,12 @@ export async function generateVideo(
       pollData = await pollRes.json()
     } catch {
       console.log(`[LTX] Poll #${i + 1} invalid JSON response`)
+
+      if (elapsed >= FALLBACK_CHECK_AFTER_MS) {
+        const fallback = tryFallbackNewestVideo(proxyDir, startedAt, outputPath)
+        if (fallback) return fallback
+      }
+
       await new Promise((r) => setTimeout(r, pollIntervalMs))
       continue
     }
@@ -397,6 +422,13 @@ export async function generateVideo(
       const fallback = tryFallbackNewestVideo(proxyDir, startedAt, outputPath)
       if (fallback) return fallback
       throw new Error(`LTX video generation failed: ${errMsg}`)
+    }
+
+    // ── Aggressive fallback: if >30s elapsed, check filesystem ──────────
+    if (elapsed >= FALLBACK_CHECK_AFTER_MS) {
+      console.log(`[LTX] checking fallback during polling (elapsed ${elapsed} ms)`)
+      const fallback = tryFallbackNewestVideo(proxyDir, startedAt, outputPath)
+      if (fallback) return fallback
     }
 
     await new Promise((r) => setTimeout(r, pollIntervalMs))
@@ -511,8 +543,6 @@ function tryFallbackNewestVideo(
   startedAt: number,
   outputPath: string
 ): VideoGenerationResult | null {
-  console.log(`[LTX] Fallback: searching for newest video in proxy directories...`)
-
   const searchDirs = [
     join(proxyDir, 'generated'),
     proxyDir,
@@ -526,18 +556,18 @@ function tryFallbackNewestVideo(
   for (const dir of uniqueDirs) {
     const found = findNewestVideo(dir, startedAt)
     if (found) {
-      console.log(`[LTX] Fallback newest video: ${found}`)
+      const st = statSync(found)
+      console.log(`[LTX] fallback candidate: ${found} (${st.size} bytes, mtime ${new Date(st.mtimeMs).toISOString()})`)
       try {
         copyAndVerify(found, outputPath)
         const sz = statSync(outputPath).size
-        console.log(`[LTX] Final file size: ${sz} bytes`)
+        console.log(`[LTX] fallback copied successfully: ${outputPath} (${sz} bytes)`)
         return { file_path: outputPath, duration: 0 }
       } catch (err) {
-        console.log(`[LTX] Fallback copy failed: ${err instanceof Error ? err.message : err}`)
+        console.log(`[LTX] fallback copy failed: ${err instanceof Error ? err.message : err}`)
       }
     }
   }
 
-  console.log(`[LTX] Fallback: no video found in ${uniqueDirs.join(', ')}`)
   return null
 }
