@@ -146,14 +146,30 @@ export async function generateImage(
   }
   if (options?.seed !== undefined) body.seed = options.seed
 
-  console.log(`[image.zimage] POST ${url} model=${body.model} size=${size} steps=${body.steps} cfg=${body.cfg} prompt_length=${prompt.length}`)
+  const timeoutMs = Number(process.env.ZIMAGE_TIMEOUT_MS || 600000)
+  console.log(`[image.zimage] POST ${url} model=${body.model} size=${size} steps=${body.steps} cfg=${body.cfg} prompt_length=${prompt.length} timeout=${timeoutMs}ms`)
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(120000),
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+  } catch (err: unknown) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(
+        `Z-Image request timed out after ${timeoutMs} ms. Increase ZIMAGE_TIMEOUT_MS or lower image size.`
+      )
+    }
+    throw err
+  } finally {
+    clearTimeout(timeout)
+  }
 
   if (!res.ok) {
     const errText = await res.text()
