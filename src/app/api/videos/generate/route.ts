@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
           data: {
             video_path: toApiPath(result.file_path),
             video_status: 'completed',
+            error_message: null,
           },
         })
 
@@ -90,6 +91,7 @@ export async function POST(request: NextRequest) {
         results.push({ scene_id: scene.id, status: 'completed', video_path: toApiPath(result.file_path) })
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
+        console.error(`[videos/generate] Scene ${scene.id} failed: ${message}`)
         await db.scene.update({
           where: { id: scene.id },
           data: { video_status: 'failed', error_message: message },
