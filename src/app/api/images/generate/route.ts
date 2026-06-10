@@ -22,6 +22,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    console.log(`[images/generate] project_id=${project_id} provider=${imageConfig.provider} base_url=${imageConfig.base_url} model=${imageConfig.model} size=${imageConfig.default_size || '768x1024'} steps=${imageConfig.steps} cfg=${imageConfig.cfg}`)
+
     // Get scenes to generate
     let scenes
     if (sceneId) {
@@ -42,8 +44,18 @@ export async function POST(request: NextRequest) {
     const errors = []
 
     for (const scene of scenes) {
-      if (!scene.image_prompt) {
-        errors.push({ scene_id: scene.id, error: 'No image_prompt for this scene' })
+      console.log(`[images/generate] scene_id=${scene.id} scene_number=${scene.scene_number} typeof image_prompt=${typeof scene.image_prompt} image_prompt_length=${scene.image_prompt?.length ?? 0}`)
+
+      // Validate image_prompt: must be a non-empty string
+      if (!scene.image_prompt || typeof scene.image_prompt !== 'string' || scene.image_prompt.trim().length === 0) {
+        const errMsg = `Scene ${scene.id} has no valid image_prompt (type=${typeof scene.image_prompt}, value=${JSON.stringify(scene.image_prompt)?.substring(0, 100)})`
+        console.error(`[images/generate] ${errMsg}`)
+
+        await db.scene.update({
+          where: { id: scene.id },
+          data: { image_status: 'failed', error_message: errMsg },
+        })
+        errors.push({ scene_id: scene.id, error: errMsg })
         continue
       }
 
@@ -59,10 +71,14 @@ export async function POST(request: NextRequest) {
           scene.negative_prompt ||
           'blurry, low quality, distorted face, bad anatomy, extra fingers, text, watermark'
 
+        console.log(`[images/generate] generating scene_id=${scene.id} outputPath=${outputPath}`)
+
         const result = await generateImage(imageConfig, scene.image_prompt, negativePrompt, outputPath, {
           seed: scene.seed || undefined,
           size: project.resolution === '720x1280' ? '768x1024' : '768x1024',
         })
+
+        console.log(`[images/generate] success scene_id=${scene.id} file_path=${result.file_path} seed=${result.seed}`)
 
         // Update scene with result
         await db.scene.update({
@@ -90,6 +106,10 @@ export async function POST(request: NextRequest) {
         results.push({ scene_id: scene.id, status: 'completed', image_path: toApiPath(result.file_path) })
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
+        const stack = err instanceof Error ? err.stack : undefined
+        console.error(`[images/generate] FAILED scene_id=${scene.id} error=${message}`)
+        if (stack) console.error(stack)
+
         await db.scene.update({
           where: { id: scene.id },
           data: { image_status: 'failed', error_message: message },
@@ -101,14 +121,14 @@ export async function POST(request: NextRequest) {
     // Check if all scenes have images
     const allScenes = await db.scene.findMany({ where: { project_id } })
     const allHaveImages = allScenes.every((s) => s.image_status === 'completed')
-    if (allHaveImages) {
+    if (allHaveImages && allScenes.length > 0) {
       await db.project.update({ where: { id: project_id }, data: { status: 'images_ready' } })
     }
 
     return NextResponse.json({ results, errors, scenes: allScenes })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error('Error generating images:', message)
+    console.error('[images/generate] Fatal error:', message)
     return NextResponse.json({ error: message || 'Failed to generate images' }, { status: 500 })
   }
 }
