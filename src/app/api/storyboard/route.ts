@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { getLLMProvider, callLLM, parseJSONFromLLM, getPromptTemplate } from '@/lib/llm'
+import { ensureImagePrompt, DEFAULT_NEGATIVE_PROMPT } from '@/server/storage'
 import { NextRequest, NextResponse } from 'next/server'
 
 const DEFAULT_STORYBOARD_PROMPT = `You are a professional storyboard artist for short-form video content. Create a detailed storyboard for this project.
@@ -146,6 +147,8 @@ export async function POST(request: NextRequest) {
       vo: scene.vo || null,
       visual_description: scene.visual_description || null,
       scene_goal: scene.scene_goal || null,
+      image_prompt: ensureImagePrompt((scene as any).image_prompt, scene),
+      negative_prompt: (scene as any).negative_prompt || DEFAULT_NEGATIVE_PROMPT,
     }))
 
     const scenes = await db.scene.createMany({

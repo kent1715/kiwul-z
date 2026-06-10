@@ -118,6 +118,64 @@ export function writeSRTFile(
   return srtPath
 }
 
+/**
+ * Default negative prompt for image generation.
+ */
+export const DEFAULT_NEGATIVE_PROMPT =
+  'text, labels, numbers, watermark, logo, subtitles, blurry, low quality, bad anatomy, deformed body, extra fingers, distorted face'
+
+/**
+ * Build a fallback image_prompt from scene fields when image_prompt is missing/null/empty.
+ * Concatenates visual_description + action + vo + scene_goal + camera into a single prompt.
+ */
+export function buildFallbackImagePrompt(scene: {
+  visual_description?: string | null
+  action?: string | null
+  vo?: string | null
+  scene_goal?: string | null
+  camera?: string | null
+}): string {
+  const parts: string[] = []
+  if (scene.visual_description && typeof scene.visual_description === 'string' && scene.visual_description.trim()) {
+    parts.push(scene.visual_description.trim())
+  }
+  if (scene.action && typeof scene.action === 'string' && scene.action.trim()) {
+    parts.push(scene.action.trim())
+  }
+  if (scene.vo && typeof scene.vo === 'string' && scene.vo.trim()) {
+    parts.push(`VO: ${scene.vo.trim()}`)
+  }
+  if (scene.scene_goal && typeof scene.scene_goal === 'string' && scene.scene_goal.trim()) {
+    parts.push(`Goal: ${scene.scene_goal.trim()}`)
+  }
+  if (scene.camera && typeof scene.camera === 'string' && scene.camera.trim()) {
+    parts.push(`Camera: ${scene.camera.trim()}`)
+  }
+  return parts.length > 0
+    ? parts.join('. ')
+    : 'cinematic vertical shot, dramatic lighting, high detail, professional composition'
+}
+
+/**
+ * Ensure image_prompt is always a non-empty string.
+ * If missing/null/object/empty, builds a fallback from scene fields.
+ */
+export function ensureImagePrompt(
+  imagePrompt: unknown,
+  scene: {
+    visual_description?: string | null
+    action?: string | null
+    vo?: string | null
+    scene_goal?: string | null
+    camera?: string | null
+  }
+): string {
+  if (typeof imagePrompt === 'string' && imagePrompt.trim().length > 0) {
+    return imagePrompt.trim()
+  }
+  return buildFallbackImagePrompt(scene)
+}
+
 function formatSRTTime(seconds: number): string {
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)

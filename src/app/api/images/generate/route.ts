@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getProviderConfig, generateImage } from '@/server/providers'
-import { ensureProjectDirs, getImagePath, toApiPath } from '@/server/storage'
+import { ensureProjectDirs, getImagePath, toApiPath, ensureImagePrompt, DEFAULT_NEGATIVE_PROMPT } from '@/server/storage'
 import type { ImageConfig } from '@/server/providers/provider.types'
 
 export async function POST(request: NextRequest) {
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`[images/generate] project_id=${project_id} provider=${imageConfig.provider} base_url=${imageConfig.base_url} model=${imageConfig.model} size=${imageConfig.default_size || '768x1024'} steps=${imageConfig.steps} cfg=${imageConfig.cfg}`)
+    console.log(`[IMAGE ROUTE] project_id=${project_id} provider=${imageConfig.provider} base_url=${imageConfig.base_url} model=${imageConfig.model} size=${imageConfig.default_size || '768x1024'} steps=${imageConfig.steps} cfg=${imageConfig.cfg}`)
 
     // Get scenes to generate
     let scenes
@@ -44,19 +44,24 @@ export async function POST(request: NextRequest) {
     const errors = []
 
     for (const scene of scenes) {
-      console.log(`[images/generate] scene_id=${scene.id} scene_number=${scene.scene_number} typeof image_prompt=${typeof scene.image_prompt} image_prompt_length=${scene.image_prompt?.length ?? 0}`)
+      console.log(`[IMAGE ROUTE] scene_id=${scene.id} scene_number=${scene.scene_number} typeof image_prompt=${typeof scene.image_prompt} image_prompt_length=${scene.image_prompt?.length ?? 0}`)
 
-      // Validate image_prompt: must be a non-empty string
-      if (!scene.image_prompt || typeof scene.image_prompt !== 'string' || scene.image_prompt.trim().length === 0) {
-        const errMsg = `Scene ${scene.id} has no valid image_prompt (type=${typeof scene.image_prompt}, value=${JSON.stringify(scene.image_prompt)?.substring(0, 100)})`
-        console.error(`[images/generate] ${errMsg}`)
+      // Build effective image_prompt: use existing if valid, otherwise build fallback
+      const effectivePrompt = ensureImagePrompt(scene.image_prompt, scene)
 
+      // If the original prompt was missing, log it and save the fallback to DB
+      const wasMissing = !scene.image_prompt || typeof scene.image_prompt !== 'string' || scene.image_prompt.trim().length === 0
+      if (wasMissing) {
+        console.log(`[IMAGE ROUTE] missing image_prompt, building fallback for scene ${scene.id}`)
+      }
+      console.log(`[IMAGE ROUTE] final prompt: ${effectivePrompt.substring(0, 200)}${effectivePrompt.length > 200 ? '...' : ''}`)
+
+      // Save the effective prompt back to scene if it was missing
+      if (wasMissing) {
         await db.scene.update({
           where: { id: scene.id },
-          data: { image_status: 'failed', error_message: errMsg },
+          data: { image_prompt: effectivePrompt },
         })
-        errors.push({ scene_id: scene.id, error: errMsg })
-        continue
       }
 
       // Update status to running
@@ -67,18 +72,16 @@ export async function POST(request: NextRequest) {
 
       try {
         const outputPath = getImagePath(project_id, scene.id)
-        const negativePrompt =
-          scene.negative_prompt ||
-          'blurry, low quality, distorted face, bad anatomy, extra fingers, text, watermark'
+        const negativePrompt = scene.negative_prompt || DEFAULT_NEGATIVE_PROMPT
 
-        console.log(`[images/generate] generating scene_id=${scene.id} outputPath=${outputPath}`)
+        console.log(`[IMAGE ROUTE] generating scene_id=${scene.id} outputPath=${outputPath}`)
 
-        const result = await generateImage(imageConfig, scene.image_prompt, negativePrompt, outputPath, {
+        const result = await generateImage(imageConfig, effectivePrompt, negativePrompt, outputPath, {
           seed: scene.seed || undefined,
           size: project.resolution === '720x1280' ? '768x1024' : '768x1024',
         })
 
-        console.log(`[images/generate] success scene_id=${scene.id} file_path=${result.file_path} seed=${result.seed}`)
+        console.log(`[IMAGE ROUTE] success scene_id=${scene.id} file_path=${result.file_path} seed=${result.seed}`)
 
         // Update scene with result
         await db.scene.update({
@@ -86,6 +89,7 @@ export async function POST(request: NextRequest) {
           data: {
             image_path: toApiPath(result.file_path),
             image_status: 'completed',
+            error_message: null,
             seed: result.seed || scene.seed,
           },
         })
@@ -97,7 +101,7 @@ export async function POST(request: NextRequest) {
             type: 'image',
             scene_id: scene.id,
             file_path: result.file_path,
-            prompt: scene.image_prompt,
+            prompt: effectivePrompt,
             seed: result.seed,
             provider: 'zimage',
           },
@@ -107,7 +111,7 @@ export async function POST(request: NextRequest) {
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
         const stack = err instanceof Error ? err.stack : undefined
-        console.error(`[images/generate] FAILED scene_id=${scene.id} error=${message}`)
+        console.error(`[IMAGE ROUTE] FAILED scene_id=${scene.id} error=${message}`)
         if (stack) console.error(stack)
 
         await db.scene.update({
@@ -128,7 +132,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ results, errors, scenes: allScenes })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error('[images/generate] Fatal error:', message)
+    console.error('[IMAGE ROUTE] Fatal error:', message)
     return NextResponse.json({ error: message || 'Failed to generate images' }, { status: 500 })
   }
 }

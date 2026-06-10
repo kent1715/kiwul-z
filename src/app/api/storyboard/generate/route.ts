@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getProviderConfig, generateJSON } from '@/server/providers'
-import { ensureProjectDirs } from '@/server/storage'
+import { ensureProjectDirs, ensureImagePrompt, DEFAULT_NEGATIVE_PROMPT } from '@/server/storage'
 import type { LLMConfig } from '@/server/providers/provider.types'
 
 export async function POST(request: NextRequest) {
@@ -81,8 +81,8 @@ export async function POST(request: NextRequest) {
           vo: s.vo || null,
           visual_description: s.visual_description || null,
           scene_goal: s.scene_goal || null,
-          image_prompt: s.image_prompt || null,
-          negative_prompt: s.negative_prompt || 'blurry, low quality, distorted face, bad anatomy, extra fingers, text, watermark',
+          image_prompt: ensureImagePrompt(s.image_prompt, s),
+          negative_prompt: s.negative_prompt || DEFAULT_NEGATIVE_PROMPT,
           motion_prompt: s.motion_prompt || 'subtle camera push-in, natural breathing motion, slight head movement, stable anatomy, consistent identity',
           camera: s.camera || null,
           character_ids: JSON.stringify(s.character_ids || []),
@@ -125,8 +125,8 @@ export async function POST(request: NextRequest) {
               await db.scene.update({
                 where: { id: sceneId },
                 data: {
-                  image_prompt: ps.image_prompt || null,
-                  negative_prompt: ps.negative_prompt || 'blurry, low quality, distorted face, bad anatomy, extra fingers, text, watermark',
+                  image_prompt: ensureImagePrompt(ps.image_prompt, ps),
+                  negative_prompt: ps.negative_prompt || DEFAULT_NEGATIVE_PROMPT,
                   motion_prompt: ps.motion_prompt || 'subtle camera push-in, natural breathing motion, stable anatomy, consistent identity, no scene change, no morphing',
                 },
               })

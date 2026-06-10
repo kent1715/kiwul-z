@@ -1,5 +1,6 @@
 import { ImageConfig, TestResult, ImageGenerationResult } from './provider.types'
 import { openAIEndpoint } from '../url'
+import { DEFAULT_NEGATIVE_PROMPT } from '../storage'
 import { writeFileSync, mkdirSync, existsSync } from 'fs'
 import { dirname } from 'path'
 
@@ -138,7 +139,7 @@ export async function generateImage(
     prompt,
     negative_prompt:
       negativePrompt ||
-      'blurry, low quality, distorted face, bad anatomy, extra fingers, text, watermark',
+      DEFAULT_NEGATIVE_PROMPT,
     size,
     n: 1,
     steps: config.steps || 8,
