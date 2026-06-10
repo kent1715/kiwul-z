@@ -1,4 +1,4 @@
-import { mkdirSync, existsSync, writeFileSync, readFileSync } from 'fs'
+import { mkdirSync, existsSync, writeFileSync, readFileSync, readdirSync, copyFileSync, statSync } from 'fs'
 import { join, dirname } from 'path'
 
 const BASE_OUTPUT_DIR = join(process.cwd(), 'outputs', 'projects')
@@ -174,6 +174,58 @@ export function ensureImagePrompt(
     return imagePrompt.trim()
   }
   return buildFallbackImagePrompt(scene)
+}
+
+const MIN_IMAGE_BYTES = 1000
+
+/**
+ * Find the most recently modified .png file in a directory
+ * that was modified after the given timestamp (with 10s tolerance)
+ * and is larger than MIN_IMAGE_BYTES.
+ */
+export function findNewestPng(dir: string, afterMs: number): string | null {
+  if (!existsSync(dir)) return null
+
+  const cutoff = afterMs - 10_000 // 10 second tolerance
+  let bestPath: string | null = null
+  let bestTime = 0
+
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isFile()) continue
+      const fullPath = join(dir, entry.name)
+      if (!fullPath.toLowerCase().endsWith('.png')) continue
+      try {
+        const st = statSync(fullPath)
+        if (st.mtimeMs < cutoff) continue
+        if (st.size <= MIN_IMAGE_BYTES) continue
+        if (st.mtimeMs > bestTime) {
+          bestTime = st.mtimeMs
+          bestPath = fullPath
+        }
+      } catch {
+        // skip unreadable
+      }
+    }
+  } catch {
+    // dir not readable
+  }
+
+  return bestPath
+}
+
+/**
+ * Verify an image file exists and is > MIN_IMAGE_BYTES.
+ */
+export function verifyImageFile(path: string): boolean {
+  if (!existsSync(path)) return false
+  try {
+    const st = statSync(path)
+    return st.size > MIN_IMAGE_BYTES
+  } catch {
+    return false
+  }
 }
 
 function formatSRTTime(seconds: number): string {
