@@ -1,4 +1,4 @@
-import { LLMConfig, TestResult } from './provider.types'
+﻿import { LLMConfig, TestResult } from './provider.types'
 import { openAIEndpoint } from '../url'
 
 export async function testConnection(config: LLMConfig): Promise<TestResult> {
@@ -25,15 +25,19 @@ export async function testConnection(config: LLMConfig): Promise<TestResult> {
 export async function callLLM(
   config: LLMConfig,
   messages: Array<{ role: string; content: string }>,
-  options?: { temperature?: number; max_tokens?: number }
+  options?: { temperature?: number; max_tokens?: number; jsonMode?: boolean }
 ): Promise<string> {
   const url = openAIEndpoint(config.base_url, '/chat/completions')
-  const body = {
+  const body: Record<string, unknown> = {
     model: config.model || 'qwen3:8b',
     messages,
     temperature: options?.temperature ?? config.temperature ?? 0.7,
     max_tokens: options?.max_tokens ?? config.max_tokens ?? 8192,
   }
+  if (options?.jsonMode) {
+    body.response_format = { type: 'json_object' }
+  }
+
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -88,13 +92,14 @@ export async function generateJSON(
   config: LLMConfig,
   systemPrompt: string,
   userPrompt: string,
-  repairAttempts: number = 1
+  repairAttempts: number = 1,
+  options?: { temperature?: number; max_tokens?: number; jsonMode?: boolean }
 ): Promise<unknown> {
   const messages = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
   ]
-  const response = await callLLM(config, messages)
+  const response = await callLLM(config, messages, options)
 
   try {
     return parseJSONFromLLM(response)
@@ -111,7 +116,16 @@ export async function generateJSON(
           'Your previous response was not valid JSON. Return ONLY valid JSON without any markdown formatting, comments, or extra text. Fix any trailing commas, missing brackets, or other JSON syntax errors.',
       },
     ]
-    const repairResponse = await callLLM(config, repairMessages)
+    const repairResponse = await callLLM(config, repairMessages, {
+      temperature: options?.temperature ?? 0.1,
+      max_tokens: options?.max_tokens,
+      jsonMode: true,
+    })
     return parseJSONFromLLM(repairResponse)
   }
 }
+
+
+
+
+

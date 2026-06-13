@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useAppStore, type SceneAssetStatus } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -34,6 +34,11 @@ function StatusBadge({ status }: { status: SceneAssetStatus }) {
   )
 }
 
+function withAssetCacheBust(src?: string | null, key?: string | null) {
+  if (!src) return ''
+  const sep = src.includes('?') ? '&' : '?'
+  return key ? `${src}${sep}v=${encodeURIComponent(key)}` : `${src}${sep}v=${Date.now()}`
+}
 export default function VoiceStep() {
   const { currentProject, scenes, setScenes, generating, setGenerating } = useAppStore()
   const { toast } = useToast()
@@ -205,23 +210,22 @@ export default function VoiceStep() {
 
                         {/* Audio Player */}
                         {scene.audio_path && scene.tts_status === 'completed' ? (
-                          <div className="flex items-center gap-2 mt-2 bg-primary/5 rounded-lg p-2">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7"
-                              onClick={() => setPlayingScene(playingScene === scene.id ? null : scene.id)}
+                          <div className="mt-2 space-y-1">
+                            <audio
+                              key={scene.audio_path}
+                              src={scene.audio_path + '?v=' + scene.id}
+                              controls
+                              preload="auto"
+                              className="w-full h-9"
+                            />
+                            <a
+                              href={scene.audio_path + '?v=' + scene.id}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs text-primary underline inline-block"
                             >
-                              {playingScene === scene.id ? (
-                                <Pause className="h-3.5 w-3.5" />
-                              ) : (
-                                <Play className="h-3.5 w-3.5" />
-                              )}
-                            </Button>
-                            <div className="flex-1 h-1 bg-muted rounded-full">
-                              <div className="h-1 bg-primary rounded-full w-0" />
-                            </div>
-                            <Volume2 className="h-3.5 w-3.5 text-muted-foreground" />
+                              Open audio file
+                            </a>
                           </div>
                         ) : null}
                       </div>
@@ -253,3 +257,6 @@ export default function VoiceStep() {
     </div>
   )
 }
+
+
+

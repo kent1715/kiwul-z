@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+﻿import { db } from '@/lib/db'
 import { getLLMProvider, callLLM, parseJSONFromLLM, getPromptTemplate } from '@/lib/llm'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -28,7 +28,15 @@ For each scene, generate:
   ]
 }
 
-Make prompts specific and detailed for AI image generation. Include character descriptions, poses, expressions, clothing, and environment details.
+Make prompts specific and detailed for AI image generation.
+
+MANDATORY CONSISTENCY RULES:
+- Every image_prompt must include relevant character.visual_consistency_prompt and character.visual_prompt details.
+- Every image_prompt must include relevant location.consistency_prompt, location.visual_style, and location.lighting details.
+- Preserve character identity, outfit, face/hair/hijab, body type, and visual style across scenes.
+- Preserve location layout, atmosphere, lighting, and camera style across scenes.
+- Do not output file paths.
+- The final image_prompt must be visual-only: no VO, no Goal, no metadata, no JSON explanation. Include character descriptions, poses, expressions, clothing, and environment details.
 Each prompt should be self-contained and specific enough to generate a consistent image.
 Return ONLY valid JSON.`
 
@@ -69,14 +77,36 @@ export async function POST(request: NextRequest) {
     // Get characters
     const characters = await db.character.findMany({ where: { project_id } })
     const charactersText = characters.map((c) =>
-      `- ${c.name}: ${c.visual_prompt || c.description || 'No description'} (Consistency: ${c.visual_consistency_prompt || 'N/A'})`
-    ).join('\n')
+      [
+        `Character: ${c.name}`,
+        c.role ? `Role: ${c.role}` : null,
+        c.description ? `Description: ${c.description}` : null,
+        c.gender ? `Gender: ${c.gender}` : null,
+        c.age_range ? `Age range: ${c.age_range}` : null,
+        c.ethnicity_style ? `Ethnicity/style: ${c.ethnicity_style}` : null,
+        c.face_description ? `Face: ${c.face_description}` : null,
+        c.hair_or_hijab ? `Hair/Hijab: ${c.hair_or_hijab}` : null,
+        c.outfit ? `Outfit: ${c.outfit}` : null,
+        c.body_type ? `Body type: ${c.body_type}` : null,
+        c.visual_consistency_prompt ? `VISUAL CONSISTENCY PROMPT: ${c.visual_consistency_prompt}` : null,
+        c.visual_prompt ? `VISUAL PROMPT: ${c.visual_prompt}` : null,
+        c.reference_image_path ? `Reference image exists at: ${c.reference_image_path}. Use it only as textual consistency context; do not mention file paths in final image_prompt.` : null,
+      ].filter(Boolean).join('\n')
+    ).join('\n\n')
 
     // Get locations
     const locations = await db.location.findMany({ where: { project_id } })
     const locationsText = locations.map((l) =>
-      `- ${l.name}: ${l.description || 'No description'} (Lighting: ${l.lighting || 'N/A'}, Consistency: ${l.consistency_prompt || 'N/A'})`
-    ).join('\n')
+      [
+        `Location: ${l.name}`,
+        l.description ? `Description: ${l.description}` : null,
+        l.consistency_prompt ? `LOCATION CONSISTENCY PROMPT: ${l.consistency_prompt}` : null,
+        l.visual_style ? `VISUAL STYLE: ${l.visual_style}` : null,
+        l.lighting ? `LIGHTING: ${l.lighting}` : null,
+        l.camera_style ? `CAMERA STYLE: ${l.camera_style}` : null,
+        l.reference_image_path ? `Reference image exists at: ${l.reference_image_path}. Use it only as textual consistency context; do not mention file paths in final image_prompt.` : null,
+      ].filter(Boolean).join('\n')
+    ).join('\n\n')
 
     // Build scenes text
     const scenesText = scenes.map((s) =>
@@ -142,3 +172,4 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+

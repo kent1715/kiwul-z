@@ -1,20 +1,28 @@
 import { TTSConfig, TestResult, TTSGenerationResult } from './provider.types'
-import { writeFileSync, mkdirSync } from 'fs'
-import { dirname } from 'path'
+import { writeFileSync, copyFileSync, existsSync } from 'fs'
+
+function joinUrl(base: string, path: string): string {
+  return base.replace(/\/$/, '') + '/' + path.replace(/^\//, '')
+}
 
 export async function testConnection(config: TTSConfig): Promise<TestResult> {
-  const start = Date.now()
   try {
-    const res = await fetch(`${config.base_url}/health`, { signal: AbortSignal.timeout(10000) })
+    const baseUrl = config.base_url || 'http://127.0.0.1:9880'
+    const res = await fetch(joinUrl(baseUrl, '/v1/models'), {
+      signal: AbortSignal.timeout(10000),
+    })
+
     if (!res.ok) {
-      // Try root endpoint
-      const res2 = await fetch(config.base_url, { signal: AbortSignal.timeout(10000) })
-      if (!res2.ok) return { success: false, message: `F5-TTS not reachable (HTTP ${res.status})` }
+      const res2 = await fetch(baseUrl, { signal: AbortSignal.timeout(10000) })
+      if (!res2.ok) return { success: false, message: `F5-TTS not reachable: HTTP ${res.status}` }
     }
-    return { success: true, message: 'F5-TTS provider reachable.', latency_ms: Date.now() - start }
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    return { success: false, message: `Connection failed: ${message}` }
+
+    return { success: true, message: 'F5-TTS provider reachable' }
+  } catch (error) {
+    return {
+      success: false,
+      message: `F5-TTS connection failed: ${error instanceof Error ? error.message : String(error)}`,
+    }
   }
 }
 
@@ -24,64 +32,86 @@ export async function generateTTS(
   outputPath: string,
   options?: { speed?: number; emotion?: string; refAudio?: string; refText?: string }
 ): Promise<TTSGenerationResult> {
-  mkdirSync(dirname(outputPath), { recursive: true })
+  const baseUrl = config.base_url || 'http://127.0.0.1:9880'
+  const endpoint = joinUrl(baseUrl, '/v1/audio/speech')
 
   const body: Record<string, unknown> = {
-    text,
-    speed: options?.speed || config.speed || 1.0,
+    model: config.model || 'f5-tts-pria1',
+    input: text,
+    response_format: 'wav',
   }
-  if (options?.emotion) body.emotion = options.emotion
-  if (config.voice) body.voice = config.voice
+
   if (options?.refAudio) body.ref_audio = options.refAudio
   if (options?.refText) body.ref_text = options.refText
+  if (options?.speed) body.speed = options.speed
 
-  // Try /synthesize endpoint
-  const url = `${config.base_url}/synthesize`
-  const res = await fetch(url, {
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(120000),
+    signal: AbortSignal.timeout(900000),
   })
 
   if (!res.ok) {
-    const errText = await res.text()
-    throw new Error(`F5-TTS generation failed (${res.status}): ${errText}`)
+    const err = await res.text().catch(() => '')
+    throw new Error(`F5-TTS generation failed (${res.status}): ${err}`)
   }
 
-  // Check if response is audio directly
   const contentType = res.headers.get('content-type') || ''
-  if (contentType.includes('audio') || contentType.includes('octet-stream')) {
+
+  // Case 1: response adalah audio langsung
+  if (contentType.includes('audio') || contentType.includes('wav') || contentType.includes('mpeg')) {
     const buffer = Buffer.from(await res.arrayBuffer())
     writeFileSync(outputPath, buffer)
-    return { file_path: outputPath, duration: estimateDuration(text, options?.speed || 1.0) }
+    return { file_path: outputPath, duration: estimateDuration(text) }
   }
 
-  // JSON response with audio data
-  const data = await res.json()
-  if (data.audio || data.data) {
-    const audioData = data.audio || data.data
-    if (typeof audioData === 'string') {
-      // base64
-      writeFileSync(outputPath, Buffer.from(audioData, 'base64'))
-    } else if (audioData.url) {
-      const audioRes = await fetch(audioData.url, { signal: AbortSignal.timeout(60000) })
-      writeFileSync(outputPath, Buffer.from(await audioRes.arrayBuffer()))
-    } else if (audioData.path) {
-      try {
-        const { copyFileSync } = await import('fs')
-        copyFileSync(audioData.path, outputPath)
-      } catch {
-        return { file_path: audioData.path, duration: estimateDuration(text, options?.speed || 1.0) }
-      }
+  // Case 2: response JSON dari local F5 proxy
+  const data = await res.json().catch(async () => {
+    const raw = await res.text().catch(() => '')
+    throw new Error(`Unexpected F5-TTS non-JSON response: ${raw.slice(0, 500)}`)
+  })
+
+  // Proxy kita mengembalikan output_path lokal
+  const outputPathFromJson =
+    data.output_path ||
+    data.path ||
+    data.audio_path ||
+    data.file_path
+
+  if (typeof outputPathFromJson === 'string' && existsSync(outputPathFromJson)) {
+    copyFileSync(outputPathFromJson, outputPath)
+    return { file_path: outputPath, duration: estimateDuration(text) }
+  }
+
+  // Proxy kita juga mengembalikan audio_url/url/file/output
+  const audioUrl =
+    data.audio_url ||
+    data.url ||
+    data.file ||
+    data.output ||
+    (data.audio && typeof data.audio === 'object' ? data.audio.url : undefined) ||
+    (data.data && typeof data.data === 'object' ? data.data.url : undefined)
+
+  if (typeof audioUrl === 'string' && /^https?:\/\//i.test(audioUrl)) {
+    const audioRes = await fetch(audioUrl, { signal: AbortSignal.timeout(300000) })
+    if (!audioRes.ok) {
+      throw new Error(`F5-TTS audio URL download failed (${audioRes.status}): ${audioUrl}`)
     }
-    return { file_path: outputPath, duration: estimateDuration(text, options?.speed || 1.0) }
+    writeFileSync(outputPath, Buffer.from(await audioRes.arrayBuffer()))
+    return { file_path: outputPath, duration: estimateDuration(text) }
   }
 
-  throw new Error('Unexpected F5-TTS response format')
+  // Kompatibilitas format lama: data.audio/data.data berisi base64/string
+  const audioData = data.audio || data.data
+  if (typeof audioData === 'string') {
+    writeFileSync(outputPath, Buffer.from(audioData, 'base64'))
+    return { file_path: outputPath, duration: estimateDuration(text) }
+  }
+
+  throw new Error(`Unexpected F5-TTS response format: ${JSON.stringify(data).slice(0, 1000)}`)
 }
 
-function estimateDuration(text: string, speed: number): number {
-  const words = text.split(/\s+/).filter(Boolean).length
-  return Math.round((words / (150 * speed)) * 60)
+function estimateDuration(text: string): number {
+  return Math.max(1, text.length / 15)
 }

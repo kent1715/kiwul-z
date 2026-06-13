@@ -59,7 +59,7 @@ export async function getProviderConfig<T extends ProviderConfig>(type: string):
         duration: configJson.duration || 3,
         fps: configJson.fps || 24,
         resolution: configJson.resolution || '768x1024',
-        motion_strength: configJson.motion_strength || 0.05,
+        motion_strength: Number(process.env.LTX_MOTION_STRENGTH || configJson.motion_strength || 0.30),
       } as T
     case 'tts':
       return {

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -29,7 +29,7 @@ export default function ScriptStep() {
       if (res.ok) {
         const data = await res.json()
         if (data.script) {
-          setScript(data.script)
+          setScript(scriptToDisplay(data.script))
         }
       }
     } catch {
@@ -48,7 +48,7 @@ export default function ScriptStep() {
       })
       if (res.ok) {
         const data = await res.json()
-        setScript(data.script)
+        setScript(scriptToDisplay(data.script))
         toast({ title: 'Script generated!', description: 'Your full script is ready.' })
       } else {
         const err = await res.json()
@@ -83,11 +83,48 @@ export default function ScriptStep() {
   }
 
   // Rough estimate: ~150 words per minute
-  function estimateDuration(text: string) {
-    const words = text.split(/\s+/).filter(Boolean).length
+  // Script can be plain text or generated JSON object.
+  function scriptToText(value: unknown): string {
+    if (!value) return ''
+    if (typeof value === 'string') return value
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+    if (Array.isArray(value)) return value.map(scriptToText).join(' ')
+    if (typeof value === 'object') {
+      const obj = value as any
+
+      if (Array.isArray(obj.parts)) {
+        return obj.parts
+          .flatMap((part: any) => Array.isArray(part.scenes) ? part.scenes : [])
+          .map((scene: any) => [scene.vo, scene.action, scene.visual_description, scene.scene_goal].filter(Boolean).join(' '))
+          .join(' ')
+      }
+
+      if (Array.isArray(obj.scenes)) {
+        return obj.scenes
+          .map((scene: any) => [scene.vo, scene.action, scene.visual_description, scene.scene_goal].filter(Boolean).join(' '))
+          .join(' ')
+      }
+
+      return Object.values(obj).map(scriptToText).join(' ')
+    }
+    return ''
+  }
+
+  function estimateDuration(text: unknown) {
+    const safeText = scriptToText(text)
+    const words = safeText.split(/\s+/).filter(Boolean).length
     return Math.round((words / 150) * 60)
   }
 
+  function scriptToDisplay(value: unknown): string {
+    if (!value) return ''
+    if (typeof value === 'string') return value
+    try {
+      return JSON.stringify(value, null, 2)
+    } catch {
+      return String(value)
+    }
+  }
   const estimatedDuration = script ? estimateDuration(script) : 0
 
   return (
@@ -104,7 +141,7 @@ export default function ScriptStep() {
         </div>
         <div className="flex gap-2">
           {script && !editing && (
-            <Button variant="outline" onClick={() => { setEditing(true); setEditText(script) }} className="gap-2">
+            <Button variant="outline" onClick={() => { setEditing(true); setEditText(scriptToDisplay(script)) }} className="gap-2">
               <Edit className="h-4 w-4" /> Edit
             </Button>
           )}
@@ -184,7 +221,7 @@ export default function ScriptStep() {
               </div>
             ) : (
               <div className="prose prose-sm max-w-none dark:prose-invert">
-                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{script}</pre>
+                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{scriptToDisplay(script)}</pre>
               </div>
             )}
           </CardContent>
@@ -193,3 +230,5 @@ export default function ScriptStep() {
     </div>
   )
 }
+
+

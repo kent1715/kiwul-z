@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+﻿import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET() {
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const {
       title,
-      content_type = 'tutorial_cooking',
+      content_type,
       language = 'id',
       duration_seconds = 50,
       aspect_ratio = '9:16',
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     const project = await db.project.create({
       data: {
         title,
-        content_type,
+        content_type: content_type || niche || 'short_form_video',
         language,
         duration_seconds,
         aspect_ratio,
@@ -65,3 +65,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create project' }, { status: 500 })
   }
 }
+
+
+

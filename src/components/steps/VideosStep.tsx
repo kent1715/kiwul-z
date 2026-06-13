@@ -9,6 +9,7 @@ import {
   Loader2,
   Video,
   AlertCircle,
+  RotateCcw,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useToast } from '@/hooks/use-toast'
@@ -54,27 +55,32 @@ export default function VideosStep() {
     }
   }
 
-  async function generateSceneVideo(sceneId: string) {
+  async function generateSceneVideo(sceneId: string, regenerate = false) {
     if (!currentProject) return
     try {
       setGeneratingScenes((prev) => new Set(prev).add(sceneId))
       const res = await fetch('/api/videos/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: currentProject.id, sceneId }),
+        body: JSON.stringify({
+          project_id: currentProject.id,
+          sceneId,
+          regenerate,
+          force: regenerate,
+        }),
       })
       if (res.ok) {
         const data = await res.json()
         if (data.scene) {
           setScenes(scenes.map((s) => (s.id === sceneId ? { ...s, ...data.scene } : s)))
         }
-        toast({ title: 'Video generation started!' })
+        toast({ title: regenerate ? 'Video regeneration started!' : 'Video generation started!' })
         setTimeout(() => fetchScenes(), 2000)
       } else {
-        toast({ title: 'Error', description: 'Failed to generate video', variant: 'destructive' })
+        toast({ title: 'Error', description: regenerate ? 'Failed to regenerate video' : 'Failed to generate video', variant: 'destructive' })
       }
     } catch {
-      toast({ title: 'Error', description: 'Failed to generate video', variant: 'destructive' })
+      toast({ title: 'Error', description: regenerate ? 'Failed to regenerate video' : 'Failed to generate video', variant: 'destructive' })
     } finally {
       setGeneratingScenes((prev) => {
         const next = new Set(prev)
@@ -166,22 +172,51 @@ export default function VideosStep() {
                     {/* Video Area */}
                     <div className="aspect-[9/16] max-h-48 relative bg-muted">
                       {scene.video_status === 'completed' && scene.video_path ? (
-                        <video
-                          src={scene.video_path}
-                          className="w-full h-full object-cover"
-                          controls
-                        />
+                        <div className="w-full h-full relative group">
+                          <video
+                            src={scene.video_path}
+                            className="w-full h-full object-cover"
+                            controls
+                          />
+                          <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/70 to-transparent flex justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="gap-1 text-xs"
+                              onClick={() => generateSceneVideo(scene.id, true)}
+                              disabled={scene.locked || generatingScenes.has(scene.id)}
+                            >
+                              {generatingScenes.has(scene.id) ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <RotateCcw className="h-3 w-3" />
+                              )}
+                              Regenerate
+                            </Button>
+                          </div>
+                        </div>
                       ) : scene.video_status === 'running' || generatingScenes.has(scene.id) ? (
                         <div className="w-full h-full flex flex-col items-center justify-center gap-2">
                           <Loader2 className="h-8 w-8 animate-spin text-primary" />
                           <span className="text-xs text-primary/70">Generating video...</span>
                         </div>
                       ) : scene.video_status === 'failed' ? (
-                        <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-3">
                           <AlertCircle className="h-8 w-8 text-red-400" />
                           <span className="text-xs text-red-500">Failed</span>
                           {scene.error_message && (
                             <span className="text-[10px] text-red-400 px-2 text-center line-clamp-2">{scene.error_message}</span>
+                          )}
+                          {canGenerate && scene.image_path && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="gap-1 text-xs mt-1"
+                              onClick={() => generateSceneVideo(scene.id, true)}
+                              disabled={scene.locked || generatingScenes.has(scene.id)}
+                            >
+                              <RotateCcw className="h-3 w-3" /> Regenerate
+                            </Button>
                           )}
                         </div>
                       ) : canGenerate && scene.image_path ? (

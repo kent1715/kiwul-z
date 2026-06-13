@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useAppStore } from '@/lib/store'
 import {
@@ -55,7 +55,7 @@ export default function CreateProjectDialog() {
   const [form, setForm] = useState({
     title: '',
     topic: '',
-    niche: 'tutorial_cooking',
+    niche: 'science_fact',
     platforms: ['tiktok'] as string[],
     language: 'id',
     duration: 50,
@@ -95,6 +95,7 @@ export default function CreateProjectDialog() {
           title: form.title,
           topic: form.topic,
           niche: form.niche,
+          content_type: form.niche,
           target_platform: form.platforms.join(','),
           language: form.language,
           duration_seconds: form.duration,
@@ -129,7 +130,7 @@ export default function CreateProjectDialog() {
     setForm({
       title: '',
       topic: '',
-      niche: 'tutorial_cooking',
+      niche: 'science_fact',
       platforms: ['tiktok'],
       language: 'id',
       duration: 50,
@@ -347,3 +348,6 @@ export default function CreateProjectDialog() {
     </Dialog>
   )
 }
+
+
+

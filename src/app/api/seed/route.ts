@@ -299,7 +299,7 @@ For each scene, generate image and motion prompts. Return JSON:
       "scene_id": "scene id from input",
       "image_prompt": "cinematic realistic vertical frame, high detail, natural lighting, DSLR raw photo look, [character description], [action], [location], [camera angle], [lighting mood], consistent character identity, realistic anatomy, stable composition",
       "negative_prompt": "blurry, low quality, distorted face, bad anatomy, extra fingers, missing fingers, deformed hands, duplicate body, text, watermark, logo, oversaturated, cartoon",
-      "motion_prompt": "subtle camera push-in, natural breathing motion, slight head movement, small environmental movement, stable anatomy, consistent identity, no scene change, no morphing, no distortion"
+      "motion_prompt": "Create subtle natural motion appropriate to the visible subject and environment. Follow the scene action. Animate only elements already visible in the image. Preserve subject identity, object shape, background, lighting, colors, camera angle, and composition. No new objects, no morphing, no stretching, no melting, no swelling, no warping, no flicker., slight head movement, small environmental movement, stable anatomy, consistent identity, no scene change, no morphing, no distortion"
     }
   ]
 }
@@ -308,7 +308,7 @@ Image prompt formula: [Style] + [Character with consistency] + [Location] + [Act
 
 Motion prompt rules for LTX:
 - Keep motion SUBTLE and STABLE
-- Default: "subtle camera push-in, natural breathing motion, slight head movement, small environmental movement, stable anatomy, consistent identity, no scene change, no morphing, no distortion"
+- Default: "Create subtle natural motion appropriate to the visible subject and environment. Follow the scene action. Animate only elements already visible in the image. Preserve subject identity, object shape, background, lighting, colors, camera angle, and composition. No new objects, no morphing, no stretching, no melting, no swelling, no warping, no flicker., slight head movement, small environmental movement, stable anatomy, consistent identity, no scene change, no morphing, no distortion"
 - Avoid: fast zoom, aggressive pan, complex hand gestures, scene transitions, morphing
 - Maximum 2-3 motion elements per prompt
 
