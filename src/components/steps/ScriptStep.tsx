@@ -110,7 +110,38 @@ export default function ScriptStep() {
     return ''
   }
 
+  function getCanonicalScriptDuration(value: unknown): number {
+    let parsed = value
+
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed)
+      } catch {
+        parsed = null
+      }
+    }
+
+    if (!parsed || typeof parsed !== 'object') return 0
+
+    const obj = parsed as any
+    const parts = Array.isArray(obj.parts) ? obj.parts : []
+    let total = 0
+
+    for (const part of parts) {
+      const scenes = Array.isArray(part?.scenes) ? part.scenes : []
+      for (const scene of scenes) {
+        const duration = Number(scene?.duration || 0)
+        if (Number.isFinite(duration)) total += duration
+      }
+    }
+
+    return total
+  }
+
   function estimateDuration(text: unknown) {
+    const canonicalDuration = getCanonicalScriptDuration(text)
+    if (canonicalDuration > 0) return canonicalDuration
+
     const safeText = scriptToText(text)
     const words = safeText.split(/\s+/).filter(Boolean).length
     return Math.round((words / 150) * 60)
@@ -230,5 +261,6 @@ export default function ScriptStep() {
     </div>
   )
 }
+
 
 

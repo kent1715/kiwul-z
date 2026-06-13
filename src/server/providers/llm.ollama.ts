@@ -42,7 +42,7 @@ export async function callLLM(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(300000), // 5 min timeout for large generations
+    signal: AbortSignal.timeout(Number(process.env.OLLAMA_TIMEOUT_MS || 900000)), // configurable timeout for large generations
   })
   if (!res.ok) {
     const errText = await res.text()
@@ -124,6 +124,7 @@ export async function generateJSON(
     return parseJSONFromLLM(repairResponse)
   }
 }
+
 
 
 

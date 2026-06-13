@@ -172,42 +172,124 @@ function normalizeScriptShape(script: any, project: any, scenePlan: ScenePlan): 
   delete normalized.scenes
   delete normalized.ending
 
-  return normalized
+  // Canonical script output: jangan simpan field liar dari LLM.
+  // Ini generic, bukan hardcode topik.
+  return {
+    metadata: normalized.metadata || {},
+    title: normalized.title || project.title || project.topic || 'Script',
+    language: normalized.language || 'id',
+    target_duration: normalized.target_duration || scenePlan.target_duration,
+    parts: normalized.parts || []
+  }
 }
 
-function postFixScriptQuality(script: any, project: any, scenePlan: ScenePlan, visualBible: any): any {
+function getBriefFacts(factualBrief: any): any[] {
+  if (!factualBrief || typeof factualBrief !== 'object') return []
+  if (Array.isArray(factualBrief.facts)) return factualBrief.facts
+  return []
+}
+
+function trimToWords(text: unknown, maxWords: number): string {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean)
+  if (words.length <= maxWords) return words.join(' ')
+  return words.slice(0, maxWords).join(' ')
+}
+
+function postFixScriptQuality(script: any, project: any, scenePlan: ScenePlan, factualBrief: any, visualBible: any): any {
   if (!script || typeof script !== 'object') return script
 
-  const scenes = getScenes(script)
+  const facts = getBriefFacts(factualBrief)
+  let scenes = getScenes(script)
+
+  // Fallback deterministic: jika LLM gagal membuat parts/scenes, bangun scene dari factual_brief
+  if (scenes.length === 0 && facts.length > 0) {
+    const fallbackTitle = project.topic || project.title || 'topik ini'
+
+    script.title = script.title || project.title || project.topic || 'Script'
+    script.language = 'id'
+    script.target_duration = scenePlan.target_duration
+    script.parts = [
+      {
+        part_number: 1,
+        part_title: 'Fakta tentang ' + fallbackTitle,
+        scenes: facts.slice(0, scenePlan.scene_count).map((fact: any, index: number) => ({
+          scene_number: index + 1,
+          duration: scenePlan.durations[index] ?? 5,
+          fact_focus: String(fact.fact_focus || ('Fakta scene ' + (index + 1))).trim(),
+          visual_anchor: String(fact.visual_anchor || fact.fact_focus || ('objek utama scene ' + (index + 1))).trim(),
+          action: '',
+          vo: String(fact.safe_explanation || fact.fact_focus || '').trim(),
+          visual_description: '',
+          scene_goal: ''
+        }))
+      }
+    ]
+
+    scenes = getScenes(script)
+  }
+
+  const usedAnchors = new Set<string>()
+
   const environment = visualBible?.environment || project.topic || project.title || 'lingkungan utama'
   const cameraStyle = visualBible?.camera_style || 'kamera dokumenter sinematik vertikal'
   const lightingStyle = visualBible?.lighting_style || 'pencahayaan realistis sesuai topik'
+  const colorPalette = Array.isArray(visualBible?.color_palette)
+    ? visualBible.color_palette.join(', ')
+    : 'warna natural sesuai topik'
 
-  for (const scene of scenes) {
-    const n = Number(scene.scene_number || 1)
+  for (let index = 0; index < scenes.length; index++) {
+    const scene = scenes[index]
+    const fact = facts[index] || {}
+    const duration = scenePlan.durations[index] ?? Number(scene.duration || 5)
+    const maxWords = Math.ceil(duration * 3)
 
-    if (!scene.action || String(scene.action).trim().length < 8) {
-      scene.action = `Tampilkan ${scene.visual_anchor || scene.fact_focus || 'objek utama'} di ${environment}`
+    scene.scene_number = index + 1
+    scene.duration = duration
+
+    scene.fact_focus = String(
+      fact.fact_focus ||
+      scene.fact_focus ||
+      ('Fakta utama scene ' + (index + 1))
+    ).trim()
+
+    let anchor = String(
+      fact.visual_anchor ||
+      scene.visual_anchor ||
+      scene.fact_focus ||
+      ('objek utama scene ' + (index + 1))
+    ).trim()
+
+
+    // Pastikan visual_anchor unik agar validator tidak gagal
+    let anchorKey = anchor.toLowerCase().trim()
+    if (usedAnchors.has(anchorKey)) {
+      anchor = anchor + ' - ' + scene.fact_focus
+      anchorKey = anchor.toLowerCase().trim()
     }
 
-    if (!scene.scene_goal || String(scene.scene_goal).trim().length < 8) {
-      scene.scene_goal = `Menjelaskan fakta: ${scene.fact_focus || 'informasi utama scene'}`
-    }
+    usedAnchors.add(anchorKey)
+    scene.visual_anchor = anchor
 
-    scene.visual_description = stringifyVisualDescription(scene.visual_description).trim()
+    const safeExplanation = String(fact.safe_explanation || '').trim()
 
-    if (!scene.visual_description || scene.visual_description.length < 120) {
-      scene.visual_description =
-        `Frame vertikal dokumenter sinematik, subjek utama ${scene.visual_anchor || scene.fact_focus || 'objek sains utama'}, ` +
-        `berada di ${environment}, komposisi jelas dan fokus, ${scene.action || 'aksi terlihat di layar'}, ` +
-        `sudut kamera ${cameraStyle}, pencahayaan ${lightingStyle}, detail visual nyata, tekstur lingkungan terlihat, ` +
-        `kedalaman ruang terasa, tanpa teks overlay, tanpa elemen yang tidak relevan.`
-    }
+    // Untuk script faktual, VO harus selalu sinkron dengan factual_brief.
+    // Jangan pakai VO lama dari LLM karena bisa bergeser antar scene.
+    scene.vo = trimToWords(safeExplanation || scene.fact_focus, maxWords)
 
-    // Hindari scene_goal kosong setelah normalisasi
-    if (!scene.scene_goal) {
-      scene.scene_goal = `Scene ${n} menjelaskan fakta utama secara visual.`
-    }
+    scene.action =
+      'Tampilkan ' + scene.visual_anchor + ' di ' + environment +
+      ', dengan gerakan kamera yang memperjelas fakta utama.'
+
+    scene.visual_description =
+      'Frame vertikal dokumenter sinematik, subjek utama ' + scene.visual_anchor +
+      ', berada di ' + environment +
+      ', komposisi fokus pada bukti visual dari fakta "' + scene.fact_focus +
+      '", sudut kamera ' + cameraStyle +
+      ', pencahayaan ' + lightingStyle +
+      ', palet warna ' + colorPalette +
+      ', detail lingkungan terlihat jelas, tekstur air atau ruang sekitar tampak nyata, tanpa teks overlay, tanpa elemen visual yang tidak relevan.'
+
+    scene.scene_goal = 'Menjelaskan fakta: ' + scene.fact_focus
   }
 
   return normalizeScriptShape(script, project, scenePlan)
@@ -369,13 +451,18 @@ RULES:
 1. Each fact must be specific, useful, and different from the others.
 2. Each fact must be safe for general audience science content.
 3. Do not use vague poetic concepts as facts.
-4. Avoid exact numbers unless broadly safe and necessary.
-5. Each fact must be visualizable.
-6. Use Indonesian only.
-7. Do not include cooking/kitchen objects unless the topic is food science.
-8. Do not use English in fact_focus, visual_anchor, or safe_explanation.
-9. Do not invent unsupported mechanisms.
-10. Return valid JSON only.
+4. Avoid exact numbers unless broadly safe, necessary, and commonly accepted.
+5. If a number, distance, time, percentage, depth, size, age, speed, or date is uncertain, use safer phrasing such as "sekitar", "umumnya", "mulai", "dapat", "sering", or "diperkirakan".
+6. Each fact must be visualizable as a concrete visible object, process, environment, or scene.
+7. visual_anchor must match the project topic, niche, environment, and fact_focus. Do not choose an object that contradicts the factual setting.
+8. fact_focus, visual_anchor, and safe_explanation must describe the same fact in the same scene. Do not shift to another fact.
+9. Avoid spelling mistakes, mixed-language terms, and inaccurate object names.
+10. Use Indonesian only.
+11. Do not include cooking/kitchen objects unless the topic is food science.
+12. Do not use English in fact_focus, visual_anchor, or safe_explanation.
+13. Do not invent unsupported mechanisms.
+14. Do not repeat visual_anchor.
+15. Return valid JSON only.
 
 OUTPUT FORMAT:
 {
@@ -555,6 +642,9 @@ export async function runScriptPipeline(projectId: string) {
   if (!project) throw new Error('Project not found')
 
   const llmConfig = await getProviderConfig<LLMConfig>('llm')
+  if (!llmConfig) {
+    throw new Error('No active LLM provider configured')
+  }
   const scenePlan = buildScenePlan(Number((project as any).duration_seconds || 60))
   const nicheKey = (project as any).niche || (project as any).content_type || 'default'
 
@@ -590,7 +680,7 @@ export async function runScriptPipeline(projectId: string) {
   )
 
   script = normalizeScriptShape(script, project, scenePlan)
-  script = postFixScriptQuality(script, project, scenePlan, visualBible)
+  script = postFixScriptQuality(script, project, scenePlan, factualBrief, visualBible)
 
   let validationErrors = validateScript(script, scenePlan)
 
@@ -604,7 +694,7 @@ export async function runScriptPipeline(projectId: string) {
     )
 
     script = normalizeScriptShape(script, project, scenePlan)
-    script = postFixScriptQuality(script, project, scenePlan, visualBible)
+    script = postFixScriptQuality(script, project, scenePlan, factualBrief, visualBible)
 
     validationErrors = validateScript(script, scenePlan)
   }
@@ -641,6 +731,18 @@ export async function runScriptPipeline(projectId: string) {
     validationErrors,
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
