@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Sparkles, RefreshCw, Edit, Check, Loader2, FileText, Clock } from 'lucide-react'
+import { Sparkles, RefreshCw, Edit, Check, Loader2, FileText, Clock, Upload } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -15,6 +15,9 @@ export default function ScriptStep() {
   const { toast } = useToast()
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState('')
+  const [importingJson, setImportingJson] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importing, setImporting] = useState(false)
 
   useEffect(() => {
     if (currentProject) {
@@ -88,6 +91,63 @@ export default function ScriptStep() {
     return Math.round((words / 150) * 60)
   }
 
+
+  async function importJsonAndBuildStoryboard() {
+    if (!currentProject) return
+
+    try {
+      setGenerating(true)
+
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(importText)
+      } catch {
+        toast({
+          title: 'Invalid JSON',
+          description: 'JSON tidak valid. Cek koma, kurung, dan tanda kutip.',
+          variant: 'destructive',
+        })
+        return
+      }
+
+      const res = await fetch('/api/script/import-build', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: currentProject.id,
+          script: parsed,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok || !data.success) {
+        toast({
+          title: 'Import failed',
+          description: data.error || 'Gagal import JSON script',
+          variant: 'destructive',
+        })
+        return
+      }
+
+      setScript(JSON.stringify(data.script, null, 2))
+      setImportingJson(false)
+      setImportText('')
+
+      toast({
+        title: 'JSON imported',
+        description: `Script tersimpan dan ${data.scenesCreated || 0} scene dibuat ke storyboard.`,
+      })
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Gagal import JSON script',
+        variant: 'destructive',
+      })
+    } finally {
+      setGenerating(false)
+    }
+  }
   const estimatedDuration = script ? estimateDuration(script) : 0
 
   return (
@@ -102,7 +162,10 @@ export default function ScriptStep() {
             Write and refine the full script for your content
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => { setImportingJson(true); setEditing(false) }} disabled={generating} className="gap-2">
+            <Upload className="h-4 w-4" /> Load JSON
+          </Button>
           {script && !editing && (
             <Button variant="outline" onClick={() => { setEditing(true); setEditText(script) }} className="gap-2">
               <Edit className="h-4 w-4" /> Edit
@@ -119,6 +182,38 @@ export default function ScriptStep() {
         </div>
       </div>
 
+      {importingJson && (
+        <Card className="card-hover border-border/50 mb-4">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Import External JSON Script</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <Textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                rows={18}
+                placeholder="Paste JSON script dari ChatGPT/Gemini di sini..."
+                className="font-mono text-sm"
+              />
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Import akan menyimpan script_json dan otomatis membuat Storyboard + Scenes.
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => { setImportingJson(false); setImportText('') }} disabled={generating}>
+                    Cancel
+                  </Button>
+                  <Button onClick={importJsonAndBuildStoryboard} disabled={generating || !importText.trim()} className="gap-2">
+                    {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    Import & Build Storyboard
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       {generating && !script ? (
         <Card className="animate-pulse">
           <CardHeader>
@@ -193,3 +288,8 @@ export default function ScriptStep() {
     </div>
   )
 }
+
+
+
+
+

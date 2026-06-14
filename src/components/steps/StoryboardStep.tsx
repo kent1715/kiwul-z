@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useAppStore, type Scene, type SceneAssetStatus } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -222,7 +222,7 @@ export default function StoryboardStep() {
                   .sort((a, b) => a.scene_number - b.scene_number)
                   .map((scene) => (
                     <Card key={scene.id} className={`overflow-hidden card-hover border-border/50 ${hasAnyFailedStatus(scene) ? 'border-red-200 dark:border-red-900/50' : ''}`}>
-                      <div className="flex">
+                      <div className="flex flex-col md:flex-row">
                         {/* Scene Number & Time */}
                         <div className="w-24 bg-primary/5 p-3 flex flex-col items-center justify-center border-r border-border/30 shrink-0">
                           <span className="text-lg font-bold text-primary">
@@ -238,7 +238,7 @@ export default function StoryboardStep() {
                         </div>
 
                         {/* Scene Content */}
-                        <CardContent className="flex-1 p-4 space-y-2">
+                        <CardContent className="min-w-0 flex-1 p-4 space-y-2">
                           {editingSceneId === scene.id ? (
                             <div className="space-y-2">
                               <div>
@@ -329,25 +329,23 @@ export default function StoryboardStep() {
                             </>
                           )}
                         </CardContent>
-
                         {/* Image Preview */}
-                        <div className="w-28 border-l border-border/30 bg-primary/5 flex items-center justify-center shrink-0">
-                          {scene.image_path ? (
-                            <div className="w-full h-full relative">
+                        <div className="w-full md:w-[240px] lg:w-[280px] shrink-0 border-t md:border-t-0 md:border-l border-border/30 bg-primary/5 p-3 flex items-center justify-center">
+                          <div className="relative aspect-[9/16] w-full overflow-hidden rounded-lg border border-border/40 bg-background/40">
+                            {scene.image_path ? (
                               <img
                                 src={scene.image_path}
                                 alt={`Scene ${scene.scene_number}`}
-                                className="w-full h-full object-cover"
+                                className="h-full w-full object-cover"
                               />
-                            </div>
-                          ) : (
-                            <div className="text-center p-2">
-                              <Eye className="h-5 w-5 text-muted-foreground/40 mx-auto" />
-                              <span className="text-[9px] text-muted-foreground">No image</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                            ) : (
+                              <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center p-2">
+                                <Eye className="h-6 w-6 text-muted-foreground/40" />
+                                <span className="text-[10px] text-muted-foreground">No image</span>
+                              </div>
+                            )}
+                          </div>
+                        </div></div>
                     </Card>
                   ))}
               </div>
@@ -358,3 +356,4 @@ export default function StoryboardStep() {
     </div>
   )
 }
+
