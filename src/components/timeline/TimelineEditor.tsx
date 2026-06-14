@@ -20,12 +20,14 @@ import type { TimelineEdit, TimelinePayload, TimelineScene } from './timeline-ty
 type TimelineEditorProps = {
   scenes: TimelineScene[]
   projectDuration?: number
+  initialTimeline?: TimelinePayload | null
   onTimelineChange?: (payload: TimelinePayload) => void
 }
 
 export default function TimelineEditor({
   scenes,
   projectDuration,
+  initialTimeline,
   onTimelineChange,
 }: TimelineEditorProps) {
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null)
@@ -49,6 +51,10 @@ export default function TimelineEditor({
     const sum = orderedScenes.reduce((acc, scene) => acc + (Number(scene.duration) || 0), 0)
     return sum || Number(projectDuration) || 0
   }, [orderedScenes, projectDuration])
+
+  const initialTimelineKey = useMemo(() => {
+    return initialTimeline ? JSON.stringify(initialTimeline) : ''
+  }, [initialTimeline])
 
   useEffect(() => {
     setTimelineEdits((prev) => {
@@ -78,6 +84,31 @@ export default function TimelineEditor({
       return next
     })
   }, [orderedScenes])
+
+  useEffect(() => {
+    if (!initialTimeline || orderedScenes.length === 0) return
+
+    if (initialTimeline.music) {
+      setMusicFileName(initialTimeline.music.file_name || '')
+      setMusicVolume(Math.round((Number(initialTimeline.music.volume) || 0) * 100))
+    }
+
+    const nextEdits: Record<string, TimelineEdit> = {}
+
+    orderedScenes.forEach((scene) => {
+      const voiceClip = initialTimeline.tracks?.voice?.find((clip) => clip.scene_id === scene.id)
+      const subtitleClip = initialTimeline.tracks?.subtitles?.find((clip) => clip.scene_id === scene.id)
+
+      nextEdits[scene.id] = {
+        voOffset: Math.round((Number(voiceClip?.offset) || 0) * 10),
+        voVolume: Math.round((Number(voiceClip?.volume ?? 1) || 1) * 100),
+        subtitleEnabled: Boolean(subtitleClip),
+        subtitleText: subtitleClip?.text || scene.vo || '',
+      }
+    })
+
+    setTimelineEdits(nextEdits)
+  }, [initialTimelineKey, orderedScenes])
 
   useEffect(() => {
     if (orderedScenes.length === 0) {
@@ -679,3 +710,4 @@ function formatTime(seconds: number) {
   if (safe < 60) return `${secs}.${tenths}s`
   return `${mins}:${String(secs).padStart(2, '0')}.${tenths}`
 }
+

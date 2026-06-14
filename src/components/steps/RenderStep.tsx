@@ -13,6 +13,7 @@ import {
   Download,
   Settings,
   ShieldCheck,
+  Save,
 } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import { useToast } from '@/hooks/use-toast'
@@ -30,6 +31,9 @@ export default function RenderStep() {
   const [qcRunning, setQcRunning] = useState(false)
   const [fetchedScenes, setFetchedScenes] = useState<TimelineScene[]>([])
   const [timelinePayload, setTimelinePayload] = useState<TimelinePayload | null>(null)
+  const [savedTimeline, setSavedTimeline] = useState<TimelinePayload | null>(null)
+  const [savingTimeline, setSavingTimeline] = useState(false)
+  const [timelineDirty, setTimelineDirty] = useState(false)
 
   useEffect(() => {
     if (!currentProject?.id) return
@@ -57,6 +61,81 @@ export default function RenderStep() {
       cancelled = true
     }
   }, [currentProject?.id, scenes.length])
+
+  useEffect(() => {
+    if (!currentProject?.id) return
+
+    let cancelled = false
+
+    async function loadTimeline() {
+      try {
+        const res = await fetch(`/api/render/timeline?project_id=${encodeURIComponent(currentProject.id)}`)
+        if (!res.ok) return
+
+        const data = await res.json()
+        if (!cancelled && data?.success && data.timeline) {
+          setSavedTimeline(data.timeline)
+          setTimelineDirty(false)
+        }
+      } catch {
+        // Timeline load should not block render page.
+      }
+    }
+
+    loadTimeline()
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentProject?.id])
+
+  function handleTimelineChange(payload: TimelinePayload) {
+    setTimelinePayload(payload)
+    setTimelineDirty(true)
+  }
+
+  async function saveTimeline() {
+    if (!currentProject?.id || !timelinePayload) return
+
+    try {
+      setSavingTimeline(true)
+
+      const res = await fetch('/api/render/timeline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: currentProject.id,
+          timeline: timelinePayload,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok || !data.success) {
+        toast({
+          title: 'Save failed',
+          description: data.error || 'Failed to save timeline',
+          variant: 'destructive',
+        })
+        return
+      }
+
+      setSavedTimeline(timelinePayload)
+      setTimelineDirty(false)
+      toast({
+        title: 'Timeline saved',
+        description: 'Timeline settings have been saved to this project.',
+      })
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to save timeline',
+        variant: 'destructive',
+      })
+    } finally {
+      setSavingTimeline(false)
+    }
+  }
 
   const effectiveScenes = useMemo<TimelineScene[]>(() => {
     return scenes.length > 0 ? (scenes as TimelineScene[]) : fetchedScenes
@@ -228,8 +307,43 @@ export default function RenderStep() {
       <TimelineEditor
         scenes={effectiveScenes}
         projectDuration={currentProject?.duration_seconds || undefined}
-        onTimelineChange={setTimelinePayload}
+        initialTimeline={savedTimeline}
+        onTimelineChange={handleTimelineChange}
       />
+
+      <Card className="mb-6 border-border/50">
+        <CardContent className="p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-semibold">Timeline Save</p>
+            <p className="text-xs text-muted-foreground">
+              {timelineDirty
+                ? 'You have unsaved timeline changes.'
+                : savedTimeline
+                  ? 'Timeline is saved.'
+                  : 'No saved timeline yet.'}
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            onClick={saveTimeline}
+            disabled={savingTimeline || !timelinePayload || !currentProject}
+            className="gap-2"
+          >
+            {savingTimeline ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4" />
+                Save Timeline
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Render Progress */}
       {rendering && (
@@ -328,3 +442,5 @@ export default function RenderStep() {
     </div>
   )
 }
+
+

@@ -8,26 +8,27 @@ datasource db {
 }
 
 model Project {
-  id              String   @id @default(cuid())
-  title           String
-  content_type    String   @default("tutorial_cooking")
-  language        String   @default("id")
-  duration_seconds Int     @default(50)
-  aspect_ratio    String   @default("9:16")
-  resolution      String   @default("1080x1920")
-  visual_style    String   @default("realistic cinematic vertical")
-  target_platform String   @default("tiktok,reels,youtube_shorts")
-  status          String   @default("draft")
-  niche           String?
-  topic           String?
-  audience        String?
-  tone            String?
-  config_json     String   @default("{}")
-  storyline_json  String   @default("{}")
-  script_json     String   @default("{}")
+  id               String   @id @default(cuid())
+  title            String
+  content_type     String   @default("tutorial_cooking")
+  language         String   @default("id")
+  duration_seconds Int      @default(50)
+  aspect_ratio     String   @default("9:16")
+  resolution       String   @default("1080x1920")
+  visual_style     String   @default("realistic cinematic vertical")
+  target_platform  String   @default("tiktok,reels,youtube_shorts")
+  status           String   @default("draft")
+  niche            String?
+  topic            String?
+  audience         String?
+  tone             String?
+  config_json      String   @default("{}")
+  storyline_json   String   @default("{}")
+  script_json      String   @default("{}")
+  timeline_json    String   @default("{}")
   final_video_path String?
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
 
   ideas       Idea[]
   storyboards Storyboard[]
@@ -38,18 +39,18 @@ model Project {
 }
 
 model Idea {
-  id          String   @id @default(cuid())
-  project_id  String
-  title       String
-  hook        String?
-  angle       String?
-  conflict_or_value String?
-  visual_potential String?
+  id                 String   @id @default(cuid())
+  project_id         String
+  title              String
+  hook               String?
+  angle              String?
+  conflict_or_value  String?
+  visual_potential   String?
   estimated_duration Int?
-  content_type String?
-  raw_json    String   @default("{}")
-  selected    Boolean  @default(false)
-  created_at  DateTime @default(now())
+  content_type       String?
+  raw_json           String   @default("{}")
+  selected           Boolean  @default(false)
+  created_at         DateTime @default(now())
 
   project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
 }
@@ -70,61 +71,78 @@ model Storyboard {
 }
 
 model Scene {
-  id               String   @id @default(cuid())
-  project_id       String
-  storyboard_id    String
-  part_number      Int      @default(1)
-  scene_number     Int      @default(1)
-  start_time       Int      @default(0)
-  end_time         Int      @default(3)
-  duration         Int      @default(3)
-  action           String?
-  vo               String?
+  id                 String   @id @default(cuid())
+  project_id         String
+  storyboard_id      String
+  part_number        Int      @default(1)
+  scene_number       Int      @default(1)
+  start_time         Int      @default(0)
+  end_time           Int      @default(3)
+  duration           Int      @default(3)
+  action             String?
+  vo                 String?
   visual_description String?
-  scene_goal       String?
-  image_prompt     String?
-  negative_prompt  String?
-  motion_prompt    String?
-  camera           String?
-  character_ids    String   @default("[]")
-  location_id      String?
-  image_path       String?
-  video_path       String?
-  audio_path       String?
-  subtitle_path    String?
-  image_status     String   @default("pending")
-  video_status     String   @default("pending")
-  tts_status       String   @default("pending")
-  status           String   @default("pending")
-  error_message    String?
-  locked           Boolean  @default(false)
-  seed             Int?
-  raw_json         String   @default("{}")
-  created_at       DateTime @default(now())
-  updated_at       DateTime @updatedAt
+  scene_goal         String?
+  image_prompt       String?
+  negative_prompt    String?
+  motion_prompt      String?
+  camera             String?
+  character_ids      String   @default("[]")
+  location_id        String?
+  image_path         String?
+  video_path         String?
+  audio_path         String?
+  subtitle_path      String?
+  image_status       String   @default("pending")
+  video_status       String   @default("pending")
+  tts_status         String   @default("pending")
+  status             String   @default("pending")
+  error_message      String?
+  locked             Boolean  @default(false)
+  seed               Int?
+  raw_json           String   @default("{}")
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
 
-  project     Project    @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  project    Project    @relation(fields: [project_id], references: [id], onDelete: Cascade)
   storyboard Storyboard @relation(fields: [storyboard_id], references: [id], onDelete: Cascade)
 }
 
 model Character {
+  id                        String   @id @default(cuid())
+  project_id                String
+  name                      String
+  role                      String   @default("supporting")
+  description               String?
+  gender                    String?
+  age_range                 String?
+  ethnicity_style           String?
+  face_description          String?
+  hair_or_hijab             String?
+  outfit                    String?
+  body_type                 String?
+  personality               String?
+  visual_prompt             String?
+  negative_prompt           String?
+  reference_image_path      String?
+  visual_consistency_prompt String?
+  raw_json                  String   @default("{}")
+  created_at                DateTime @default(now())
+  updated_at                DateTime @updatedAt
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+}
+
+model Location {
   id                   String   @id @default(cuid())
   project_id           String
   name                 String
-  role                 String   @default("supporting")
   description          String?
-  gender               String?
-  age_range            String?
-  ethnicity_style      String?
-  face_description     String?
-  hair_or_hijab        String?
-  outfit               String?
-  body_type            String?
-  personality          String?
-  visual_prompt        String?
-  negative_prompt      String?
+  visual_style         String?
+  lighting             String?
+  camera_style         String?
+  consistency_prompt   String?
   reference_image_path String?
-  visual_consistency_prompt String?
   raw_json             String   @default("{}")
   created_at           DateTime @default(now())
   updated_at           DateTime @updatedAt
@@ -132,57 +150,40 @@ model Character {
   project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
 }
 
-model Location {
-  id                String   @id @default(cuid())
-  project_id        String
-  name              String
-  description       String?
-  visual_style      String?
-  lighting          String?
-  camera_style      String?
-  consistency_prompt String?
-  reference_image_path String?
-  raw_json          String   @default("{}")
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
-
-  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
-}
-
 model Asset {
-  id          String   @id @default(cuid())
-  project_id  String
-  type        String   // image, video, audio, subtitle, final
-  scene_id    String?
-  file_path   String
-  prompt      String?
-  seed        Int?
-  provider    String?
-  metadata    String   @default("{}")
-  created_at  DateTime @default(now())
+  id         String   @id @default(cuid())
+  project_id String
+  type       String // image, video, audio, subtitle, final
+  scene_id   String?
+  file_path  String
+  prompt     String?
+  seed       Int?
+  provider   String?
+  metadata   String   @default("{}")
+  created_at DateTime @default(now())
 
   project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
 }
 
 model Provider {
-  id         String   @id @default(cuid())
-  type       String   // llm, image, tts, video, render
-  name       String
-  base_url   String
-  model      String?
-  config_json String  @default("{}")
-  is_default Boolean  @default(false)
-  is_active  Boolean  @default(true)
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id          String   @id @default(cuid())
+  type        String // llm, image, tts, video, render
+  name        String
+  base_url    String
+  model       String?
+  config_json String   @default("{}")
+  is_default  Boolean  @default(false)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
 }
 
 model PromptTemplate {
-  id          String   @id @default(cuid())
-  type        String   // idea, storyline, script, storyboard, character, image, motion
-  name        String
-  template    String
-  is_default  Boolean  @default(false)
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  id         String   @id @default(cuid())
+  type       String // idea, storyline, script, storyboard, character, image, motion
+  name       String
+  template   String
+  is_default Boolean  @default(false)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 }
