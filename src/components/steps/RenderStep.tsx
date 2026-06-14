@@ -13,19 +13,11 @@ import {
   Download,
   Settings,
   ShieldCheck,
-  Mic2,
-  Captions,
-  Music,
 } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import { useToast } from '@/hooks/use-toast'
-
-type TimelineEdit = {
-  voOffset: number
-  voVolume: number
-  subtitleEnabled: boolean
-  subtitleText: string
-}
+import TimelineEditor from '@/components/timeline/TimelineEditor'
+import type { TimelinePayload, TimelineScene } from '@/components/timeline/timeline-types'
 
 export default function RenderStep() {
   const { currentProject, scenes } = useAppStore()
@@ -36,139 +28,61 @@ export default function RenderStep() {
   const [renderComplete, setRenderComplete] = useState(false)
   const [qcResult, setQcResult] = useState<Record<string, unknown> | null>(null)
   const [qcRunning, setQcRunning] = useState(false)
+  const [fetchedScenes, setFetchedScenes] = useState<TimelineScene[]>([])
+  const [timelinePayload, setTimelinePayload] = useState<TimelinePayload | null>(null)
 
-  const [timelineEdits, setTimelineEdits] = useState<Record<string, TimelineEdit>>({})
-  const [musicFileName, setMusicFileName] = useState('')
-  const [musicVolume, setMusicVolume] = useState(18)
+  useEffect(() => {
+    if (!currentProject?.id) return
+    if (scenes.length > 0) return
 
-  const scenesWithVideo = scenes.filter((s) => s.video_status === 'completed')
-  const scenesWithAudio = scenes.filter((s) => s.tts_status === 'completed')
-  const scenesWithImage = scenes.filter((s) => s.image_status === 'completed')
+    let cancelled = false
 
-  const readinessScore = scenes.length > 0
-    ? Math.round(((scenesWithImage.length + scenesWithVideo.length + scenesWithAudio.length) / (scenes.length * 3)) * 100)
+    async function fetchProjectScenes() {
+      try {
+        const res = await fetch(`/api/scenes?project_id=${encodeURIComponent(currentProject.id)}`)
+        if (!res.ok) return
+
+        const data = await res.json()
+        if (!cancelled && Array.isArray(data)) {
+          setFetchedScenes(data)
+        }
+      } catch {
+        // Render page should stay usable even if this fetch fails.
+      }
+    }
+
+    fetchProjectScenes()
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentProject?.id, scenes.length])
+
+  const effectiveScenes = useMemo<TimelineScene[]>(() => {
+    return scenes.length > 0 ? (scenes as TimelineScene[]) : fetchedScenes
+  }, [scenes, fetchedScenes])
+
+  const scenesWithVideo = effectiveScenes.filter((s) => s.video_status === 'completed')
+  const scenesWithAudio = effectiveScenes.filter((s) => s.tts_status === 'completed')
+  const scenesWithImage = effectiveScenes.filter((s) => s.image_status === 'completed')
+
+  const readinessScore = effectiveScenes.length > 0
+    ? Math.round(((scenesWithImage.length + scenesWithVideo.length + scenesWithAudio.length) / (effectiveScenes.length * 3)) * 100)
     : 0
 
   const qualityChecks = [
-    { label: 'Images generated', count: scenesWithImage.length, total: scenes.length, ok: scenesWithImage.length === scenes.length && scenes.length > 0 },
-    { label: 'Videos generated', count: scenesWithVideo.length, total: scenes.length, ok: scenesWithVideo.length === scenes.length && scenes.length > 0 },
-    { label: 'Voice-over ready', count: scenesWithAudio.length, total: scenes.length, ok: scenesWithAudio.length === scenes.length && scenes.length > 0 },
-    { label: 'All scenes locked', count: scenes.filter((s) => s.locked).length, total: scenes.length, ok: scenes.filter((s) => s.locked).length === scenes.length && scenes.length > 0 },
+    { label: 'Images generated', count: scenesWithImage.length, total: effectiveScenes.length, ok: scenesWithImage.length === effectiveScenes.length && effectiveScenes.length > 0 },
+    { label: 'Videos generated', count: scenesWithVideo.length, total: effectiveScenes.length, ok: scenesWithVideo.length === effectiveScenes.length && effectiveScenes.length > 0 },
+    { label: 'Voice-over ready', count: scenesWithAudio.length, total: effectiveScenes.length, ok: scenesWithAudio.length === effectiveScenes.length && effectiveScenes.length > 0 },
+    {
+      label: 'All scenes locked',
+      count: effectiveScenes.filter((s) => s.locked).length,
+      total: effectiveScenes.length,
+      ok: effectiveScenes.filter((s) => s.locked).length === effectiveScenes.length && effectiveScenes.length > 0,
+    },
   ]
 
   const allChecksPassed = qualityChecks.every((c) => c.ok)
-
-  const orderedScenes = useMemo(() => {
-    return [...scenes].sort((a, b) => a.scene_number - b.scene_number)
-  }, [scenes])
-
-  const totalTimelineDuration = useMemo(() => {
-    return orderedScenes.reduce((sum, scene) => sum + (Number(scene.duration) || 0), 0)
-  }, [orderedScenes])
-
-  useEffect(() => {
-    setTimelineEdits((prev) => {
-      const next: Record<string, TimelineEdit> = { ...prev }
-      const validIds = new Set(orderedScenes.map((scene) => scene.id))
-
-      orderedScenes.forEach((scene) => {
-        if (!next[scene.id]) {
-          next[scene.id] = {
-            voOffset: 0,
-            voVolume: 100,
-            subtitleEnabled: true,
-            subtitleText: scene.vo || '',
-          }
-        } else if (!next[scene.id].subtitleText && scene.vo) {
-          next[scene.id] = {
-            ...next[scene.id],
-            subtitleText: scene.vo,
-          }
-        }
-      })
-
-      Object.keys(next).forEach((id) => {
-        if (!validIds.has(id)) delete next[id]
-      })
-
-      return next
-    })
-  }, [orderedScenes])
-
-  function updateTimelineEdit(sceneId: string, patch: Partial<TimelineEdit>) {
-    setTimelineEdits((prev) => ({
-      ...prev,
-      [sceneId]: {
-        ...(prev[sceneId] || {
-          voOffset: 0,
-          voVolume: 100,
-          subtitleEnabled: true,
-          subtitleText: '',
-        }),
-        ...patch,
-      },
-    }))
-  }
-
-  function getSceneStart(index: number) {
-    return orderedScenes.slice(0, index).reduce((sum, scene) => sum + (Number(scene.duration) || 0), 0)
-  }
-
-  const timelinePayload = {
-    duration: totalTimelineDuration,
-    music: {
-      file_name: musicFileName,
-      volume: musicVolume / 100,
-      fade_in: 1,
-      fade_out: 2,
-    },
-    tracks: {
-      video: orderedScenes.map((scene, index) => {
-        const start = getSceneStart(index)
-        const duration = Number(scene.duration) || 0
-
-        return {
-          scene_id: scene.id,
-          scene_number: scene.scene_number,
-          start,
-          end: start + duration,
-          duration,
-          src: scene.video_path || '',
-        }
-      }),
-      voice: orderedScenes.map((scene, index) => {
-        const edit = timelineEdits[scene.id]
-        const start = getSceneStart(index)
-        const duration = Number(scene.duration) || 0
-        const offset = (edit?.voOffset || 0) / 10
-
-        return {
-          scene_id: scene.id,
-          scene_number: scene.scene_number,
-          start: start + offset,
-          end: start + duration + offset,
-          offset,
-          volume: (edit?.voVolume ?? 100) / 100,
-          text: scene.vo || '',
-          src: scene.tts_path || '',
-        }
-      }),
-      subtitles: orderedScenes
-        .filter((scene) => timelineEdits[scene.id]?.subtitleEnabled !== false)
-        .map((scene, index) => {
-          const start = getSceneStart(index)
-          const duration = Number(scene.duration) || 0
-
-          return {
-            scene_id: scene.id,
-            scene_number: scene.scene_number,
-            start,
-            end: start + duration,
-            text: timelineEdits[scene.id]?.subtitleText || scene.vo || '',
-          }
-        }),
-    },
-  }
 
   async function startRender() {
     if (!currentProject) return
@@ -230,7 +144,7 @@ export default function RenderStep() {
   const downloadUrl = currentProject ? `/api/assets/projects/${currentProject.id}/final/final.mp4` : null
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6">
         <h2 className="text-xl font-bold flex items-center gap-2">
           <Film className="h-5 w-5 text-primary" />
@@ -282,7 +196,7 @@ export default function RenderStep() {
           <CardTitle className="text-base">Export Settings</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
             <div>
               <span className="text-muted-foreground">Resolution</span>
               <p className="font-medium">{currentProject?.resolution || '1080x1920'}</p>
@@ -301,7 +215,7 @@ export default function RenderStep() {
             </div>
             <div>
               <span className="text-muted-foreground">Scenes</span>
-              <p className="font-medium">{scenes.length}</p>
+              <p className="font-medium">{effectiveScenes.length}</p>
             </div>
             <div>
               <span className="text-muted-foreground">Platform</span>
@@ -311,205 +225,11 @@ export default function RenderStep() {
         </CardContent>
       </Card>
 
-      {/* Timeline Editor */}
-      <Card className="mb-6 card-hover border-border/50">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Film className="h-4 w-4" />
-            Timeline Editor
-          </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Sync video, voice-over, subtitle, and background music before final render.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {orderedScenes.length === 0 ? (
-            <div className="text-sm text-muted-foreground border rounded-lg p-4 text-center">
-              No scenes available for timeline.
-            </div>
-          ) : (
-            <>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>0s</span>
-                  <span>Total: {totalTimelineDuration || currentProject?.duration_seconds || 0}s</span>
-                </div>
-
-                <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
-                  <TimelineTrack
-                    label="VIDEO"
-                    scenes={orderedScenes}
-                    totalDuration={totalTimelineDuration}
-                    className="bg-primary/15"
-                    getText={(scene) => `S${scene.scene_number}`}
-                  />
-
-                  <TimelineTrack
-                    label="VO"
-                    icon={<Mic2 className="h-3 w-3" />}
-                    scenes={orderedScenes}
-                    totalDuration={totalTimelineDuration}
-                    className="bg-blue-500/15"
-                    getText={(scene) => `VO ${scene.scene_number}`}
-                  />
-
-                  <TimelineTrack
-                    label="SUB"
-                    icon={<Captions className="h-3 w-3" />}
-                    scenes={orderedScenes}
-                    totalDuration={totalTimelineDuration}
-                    className="bg-emerald-500/15"
-                    getText={(scene) => {
-                      const enabled = timelineEdits[scene.id]?.subtitleEnabled !== false
-                      return enabled ? `SUB ${scene.scene_number}` : 'OFF'
-                    }}
-                  />
-
-                  <div className="grid grid-cols-[80px_minmax(0,1fr)] gap-3 items-center">
-                    <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
-                      <Music className="h-3 w-3" />
-                      MUSIC
-                    </div>
-                    <div className="flex h-9 items-center rounded-md border bg-purple-500/15 px-3 text-[10px]">
-                      {musicFileName ? musicFileName : 'No background music selected'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                {orderedScenes.map((scene, index) => {
-                  const edit = timelineEdits[scene.id] || {
-                    voOffset: 0,
-                    voVolume: 100,
-                    subtitleEnabled: true,
-                    subtitleText: scene.vo || '',
-                  }
-
-                  const start = getSceneStart(index)
-                  const duration = Number(scene.duration) || 0
-
-                  return (
-                    <div key={`edit-${scene.id}`} className="rounded-lg border bg-card p-3 space-y-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold">Scene {scene.scene_number}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {start}s - {start + duration}s
-                          </p>
-                        </div>
-                        <Badge variant="secondary" className="text-[10px]">
-                          {scene.duration}s
-                        </Badge>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">VO Offset</span>
-                          <span className="font-medium">{(edit.voOffset / 10).toFixed(1)}s</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateTimelineEdit(scene.id, { voOffset: Math.max(edit.voOffset - 1, -20) })}
-                          >
-                            -0.1s
-                          </Button>
-                          <input
-                            type="range"
-                            min="-20"
-                            max="20"
-                            value={edit.voOffset}
-                            onChange={(e) => updateTimelineEdit(scene.id, { voOffset: Number(e.target.value) })}
-                            className="w-full"
-                          />
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateTimelineEdit(scene.id, { voOffset: Math.min(edit.voOffset + 1, 20) })}
-                          >
-                            +0.1s
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">VO Volume</span>
-                          <span className="font-medium">{edit.voVolume}%</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="150"
-                          value={edit.voVolume}
-                          onChange={(e) => updateTimelineEdit(scene.id, { voVolume: Number(e.target.value) })}
-                          className="w-full"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-2 text-xs font-medium">
-                          <input
-                            type="checkbox"
-                            checked={edit.subtitleEnabled}
-                            onChange={(e) => updateTimelineEdit(scene.id, { subtitleEnabled: e.target.checked })}
-                          />
-                          Subtitle aktif
-                        </label>
-                        <textarea
-                          value={edit.subtitleText}
-                          onChange={(e) => updateTimelineEdit(scene.id, { subtitleText: e.target.value })}
-                          rows={2}
-                          className="w-full rounded-md border bg-background p-2 text-xs"
-                          placeholder="Subtitle text..."
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Music className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-semibold">Background Music</p>
-                    <p className="text-xs text-muted-foreground">
-                      Phase 1 stores file name and volume. Real upload and ffmpeg mixing will be connected in the next patch.
-                    </p>
-                  </div>
-                </div>
-
-                <input
-                  type="file"
-                  accept="audio/*"
-                  onChange={(e) => setMusicFileName(e.target.files?.[0]?.name || '')}
-                  className="block w-full text-xs"
-                />
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Music Volume</span>
-                    <span className="font-medium">{musicVolume}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={musicVolume}
-                    onChange={(e) => setMusicVolume(Number(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+      <TimelineEditor
+        scenes={effectiveScenes}
+        projectDuration={currentProject?.duration_seconds || undefined}
+        onTimelineChange={setTimelinePayload}
+      />
 
       {/* Render Progress */}
       {rendering && (
@@ -552,7 +272,7 @@ export default function RenderStep() {
         <Button
           size="lg"
           onClick={startRender}
-          disabled={rendering || scenes.length === 0}
+          disabled={rendering || effectiveScenes.length === 0}
           className="flex-1 gap-2"
         >
           {rendering ? (
@@ -600,57 +320,11 @@ export default function RenderStep() {
         </Button>
       </div>
 
-      {!allChecksPassed && scenes.length > 0 && (
+      {!allChecksPassed && effectiveScenes.length > 0 && (
         <p className="text-xs text-amber-700 dark:text-amber-400 mt-3 text-center">
           Some quality checks have not passed. You can still render, but the output may be incomplete.
         </p>
       )}
-    </div>
-  )
-}
-
-function TimelineTrack({
-  label,
-  icon,
-  scenes,
-  totalDuration,
-  className,
-  getText,
-}: {
-  label: string
-  icon?: React.ReactNode
-  scenes: Array<{
-    id: string
-    scene_number: number
-    duration: number
-  }>
-  totalDuration: number
-  className: string
-  getText: (scene: { id: string; scene_number: number; duration: number }) => string
-}) {
-  return (
-    <div className="grid grid-cols-[80px_minmax(0,1fr)] gap-3 items-center">
-      <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
-        {icon}
-        {label}
-      </div>
-      <div className="flex h-9 overflow-hidden rounded-md border bg-background">
-        {scenes.map((scene) => {
-          const duration = Number(scene.duration) || 0
-          const width = totalDuration > 0 ? (duration / totalDuration) * 100 : 0
-
-          return (
-            <div
-              key={`${label}-${scene.id}`}
-              className={`flex items-center justify-center border-r px-2 text-[10px] font-medium ${className}`}
-              style={{ width: `${width}%` }}
-              title={`Scene ${scene.scene_number} - ${duration}s`}
-            >
-              {getText(scene)}
-            </div>
-          )
-        })}
-      </div>
     </div>
   )
 }
